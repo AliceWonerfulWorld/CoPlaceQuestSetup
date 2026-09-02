@@ -46,14 +46,27 @@
     "com.unity.modules.video": "1.0.0",
     "com.unity.modules.vr": "1.0.0",
     "com.unity.modules.wind": "1.0.0",
-    "com.unity.modules.xr": "1.0.0"
+    "com.unity.modules.xr": "1.0.0",
+    "com.styly.styly-netsync": "0.17.4"
   },
   "scopedRegistries": [
     {
       "name": "package.openupm.com",
       "url": "https://package.openupm.com",
       "scopes": [
-        "com.styly.styly-xr-rig"
+        "com.styly.device-id-provider",
+        "com.styly.shader-collection.urp",
+        "com.styly.styly-netsync",
+        "com.styly.styly-xr-rig",
+        "org.nuget.asyncio",
+        "org.nuget.nacl.net",
+        "org.nuget.netmq",
+        "org.nuget.system.buffers",
+        "org.nuget.system.memory",
+        "org.nuget.system.numerics.vectors",
+        "org.nuget.system.runtime.compilerservices.unsafe",
+        "org.nuget.system.security.principal.windows",
+        "org.nuget.system.servicemodel.primitives"
       ]
     }
   ]
