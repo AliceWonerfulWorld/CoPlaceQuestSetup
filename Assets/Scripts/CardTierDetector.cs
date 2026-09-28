@@ -6,12 +6,15 @@ public class CardTierDetector : MonoBehaviour
 {
     public string CurrentTier { get; private set; } = "Unclassified";
 
+    // 候補同期用
+    [SerializeField]
+    private CandidateSyncTest candidateSync;
+
     // 今カードが入っている可能性のあるTier
     private TierZone candidateZone;
 
     // 現在カードが実際に配置されているTier
     private TierZone currentZone;
-
 
     private Rigidbody rb;
     private XRGrabInteractable grabInteractable;
@@ -103,5 +106,23 @@ public class CardTierDetector : MonoBehaviour
         Debug.Log(
             $"{gameObject.name} classified as Tier {CurrentTier}"
             );
+        
+        // 同期候補をNetSyncへ送信
+        if (candidateSync != null)
+        {
+            if (CurrentTier == "Unclassified")
+            {
+                candidateSync.CancelCandidate(
+                    gameObject.name
+                );
+            }
+            else
+            {
+                candidateSync.SendCandidate(
+                    gameObject.name,
+                    CurrentTier
+                );
+            }
+        }
     }
 }
