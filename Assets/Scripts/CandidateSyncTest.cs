@@ -4,8 +4,9 @@ using System.Text;
 using TMPro;
 using Styly.NetSync;
 using UnityEngine;
+#if UNITY_EDITOR
 using UnityEngine.InputSystem;
-using UnityEngine.XR;
+#endif
 
 public class CandidateSyncTest : MonoBehaviour
 {
@@ -23,7 +24,7 @@ public class CandidateSyncTest : MonoBehaviour
     private readonly Dictionary<string, string> visibilityLogs = new Dictionary<string, string>();
     private readonly HashSet<string> rejectedChanges = new HashSet<string>();
     private NetSyncManager subscribedManager;
-    private bool started, networkWasReady, previousPrimaryButton, previousSecondaryButton;
+    private bool started, networkWasReady;
     private string previousCurrentCard;
     private class RevealedCandidate { public int clientNo, displayId; public string tier, selectedAt; }
     private bool IsProposed => experimentManager != null && experimentManager.CurrentMode == ExperimentManager.ExperimentMode.Proposed;
@@ -76,25 +77,37 @@ public class CandidateSyncTest : MonoBehaviour
         Subscribe();
         if (subscribedManager == null || !subscribedManager.IsReady) networkWasReady = false;
         else if (!networkWasReady) OnReady();
-        if (!IsProposed) return;
-        if (Keyboard.current != null)
-        {
-            if (Keyboard.current.aKey.wasPressedThisFrame) SendCandidate("Card_01", "A");
-            if (Keyboard.current.cKey.wasPressedThisFrame) SendCandidate("Card_01", "C");
-        }
-        var controller = InputDevices.GetDeviceAtXRNode(XRNode.RightHand);
-        if (!controller.isValid) return;
-        if (controller.TryGetFeatureValue(UnityEngine.XR.CommonUsages.primaryButton, out bool primary))
-        {
-            if (primary && !previousPrimaryButton) SendCandidate("Card_01", "A");
-            previousPrimaryButton = primary;
-        }
-        if (controller.TryGetFeatureValue(UnityEngine.XR.CommonUsages.secondaryButton, out bool secondary))
-        {
-            if (secondary && !previousSecondaryButton) SendCandidate("Card_01", "C");
-            previousSecondaryButton = secondary;
-        }
+#if UNITY_EDITOR
+        HandleEditorTestInput();
+#endif
     }
+
+#if UNITY_EDITOR
+    private void HandleEditorTestInput()
+    {
+        // Keep experimenter shortcuts silent and leave Player/Quest input to
+        // CardTierDetector's real Grab/Release path.
+        if (!Application.isPlaying || !IsProposed || participantRegistry == null ||
+            !participantRegistry.IsLocalParticipant) return;
+        var keyboard = Keyboard.current;
+        if (keyboard == null) return;
+
+        string tier = null;
+        if (keyboard.digit1Key.wasPressedThisFrame) tier = "A";
+        else if (keyboard.digit2Key.wasPressedThisFrame) tier = "B";
+        else if (keyboard.digit3Key.wasPressedThisFrame) tier = "C";
+        else if (keyboard.digit4Key.wasPressedThisFrame) tier = "D";
+        else if (keyboard.digit0Key.wasPressedThisFrame)
+        {
+            Debug.Log("[Editor Test Cancel] Card_01");
+            CancelCandidate("Card_01");
+            return;
+        }
+        if (tier == null) return;
+        Debug.Log($"[Editor Test Answer] Card_01 -> Tier {tier}");
+        SendCandidate("Card_01", tier);
+    }
+#endif
     private bool CanSend(string cardId)
     {
         if (!IsProposed || !isActiveAndEnabled || string.IsNullOrEmpty(cardId)) return false;
