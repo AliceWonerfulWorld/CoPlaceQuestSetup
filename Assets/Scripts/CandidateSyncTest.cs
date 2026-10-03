@@ -17,6 +17,9 @@ public class CandidateSyncTest : MonoBehaviour
     [SerializeField]
     private CandidateMarkerManager candidateMarkerManager;
 
+    [SerializeField]
+    private ExperimentManager experimentManager;
+
     private Dictionary<string, string> participantCandidates
         = new Dictionary<string, string>();
 
@@ -100,6 +103,22 @@ public class CandidateSyncTest : MonoBehaviour
 
     public void SendCandidate(string cardId, string tierId)
     {
+        if (experimentManager == null)
+        {
+            Debug.LogWarning(
+                "[CandidateSyncTest] ExperimentManager が設定されていません"
+            );
+            return;
+        }
+
+        if (experimentManager.CurrentMode != ExperimentManager.ExperimentMode.Proposed)
+        {
+            Debug.Log(
+                $"[CandidateSyncTest] Mode {experimentManager.CurrentMode} のため候補送信をスキップ"
+            );
+            return;
+        }
+
         string selectedAt = DateTime.UtcNow.ToString("o");
 
         NetSyncManager.Instance.SetClientVariable(
@@ -124,6 +143,22 @@ public class CandidateSyncTest : MonoBehaviour
 
     public void CancelCandidate(string cardId)
     {
+        if (experimentManager == null)
+        {
+            Debug.LogWarning(
+                "[CandidateSyncTest] ExperimentManager が設定されていません"
+            );
+            return;
+        }
+
+        if (experimentManager.CurrentMode != ExperimentManager.ExperimentMode.Proposed)
+        {
+            Debug.Log(
+                $"[CandidateSyncTest] Mode {experimentManager.CurrentMode} のため候補キャンセルをスキップ"
+            );
+            return;
+        }
+
         NetSyncManager.Instance.SetClientVariable(
             $"candidate_{cardId}",
             "Unclassified"
