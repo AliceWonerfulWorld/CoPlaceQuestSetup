@@ -22,6 +22,12 @@ public class CardTierDetector : MonoBehaviour
     // 現在カードが実際に配置されているTier
     private TierZone currentZone;
 
+    [Tooltip("Drop targets cached in the scene. The card center determines the nearest valid Tier.")]
+    [SerializeField] private TierZone[] placementZones;
+    private TierZone hoveredZone;
+    private Vector3 grabStartPosition;
+    private Quaternion grabStartRotation;
+
     private Rigidbody rb;
     private XRGrabInteractable grabInteractable;
 
@@ -36,6 +42,9 @@ public class CardTierDetector : MonoBehaviour
 
     private void OnDestroy()
     {
+        if (hoveredZone != null) hoveredZone.SetHovered(gameObject, false);
+        if (currentZone != null) currentZone.ReleaseCard(gameObject);
+        if (grabInteractable == null) return;
         grabInteractable.selectEntered.RemoveListener(OnGrabbed);
         grabInteractable.selectExited.RemoveListener(OnReleased);
     }
@@ -43,8 +52,46 @@ public class CardTierDetector : MonoBehaviour
 
     private void OnGrabbed(SelectEnterEventArgs args)
     {
+        grabStartPosition = transform.position;
+        grabStartRotation = transform.rotation;
         // 再び掴んだ時は動かせるようにする。
         rb.isKinematic = false;
+    }
+
+    private void Update()
+    {
+        TierZone target = grabInteractable != null && grabInteractable.isSelected ? FindDropZone() : null;
+        if (target == hoveredZone) return;
+        if (hoveredZone != null) hoveredZone.SetHovered(gameObject, false);
+        hoveredZone = target;
+        if (hoveredZone != null) hoveredZone.SetHovered(gameObject, true);
+    }
+
+    private TierZone FindDropZone()
+    {
+        // Legacy/test setups may still use trigger-driven selection.
+        if (placementZones == null || placementZones.Length == 0) return candidateZone;
+        TierZone closest = null;
+        float best = float.PositiveInfinity;
+        foreach (var zone in placementZones)
+        {
+            if (zone == null || !zone.ContainsDropPoint(transform.position)) continue;
+            float distance = (zone.transform.position - transform.position).sqrMagnitude;
+            if (distance < best) { closest = zone; best = distance; }
+        }
+        return closest;
+    }
+
+    private void RestorePreviousPlacement()
+    {
+        Transform point = currentZone != null ? currentZone.GetAvailableSnapPoint(gameObject) : null;
+        rb.isKinematic = false;
+        rb.linearVelocity = Vector3.zero;
+        rb.angularVelocity = Vector3.zero;
+        transform.SetPositionAndRotation(point != null ? point.position : grabStartPosition,
+            point != null ? point.rotation : grabStartRotation);
+        rb.isKinematic = true;
+        candidateZone = currentZone;
     }
 
     private void OnTriggerEnter(Collider other)
@@ -76,6 +123,8 @@ public class CardTierDetector : MonoBehaviour
 
     private void OnReleased(SelectExitEventArgs args)
     {
+        if (hoveredZone != null) hoveredZone.SetHovered(gameObject, false);
+        hoveredZone = null;
         if (candidateSync != null && experimentManager != null &&
             experimentManager.CurrentMode == ExperimentManager.ExperimentMode.Proposed &&
             candidateSync.IsCardRevealed(gameObject.name))
@@ -97,22 +146,23 @@ public class CardTierDetector : MonoBehaviour
             Debug.LogWarning($"[Candidate] Reveal後のカード変更・取消は禁止: {gameObject.name}", this);
             return;
         }
+        candidateZone = FindDropZone();
         if (candidateZone == null)
-           return;
-
-        // 別のTierへ移動する場合は
-        // 今まで使用していたSnapPointを開放する
-        if (currentZone != null && currentZone != candidateZone)
         {
-            currentZone.ReleaseCard(gameObject);
+            RestorePreviousPlacement();
+            return;
         }
 
-        // 空いているSnapPointを取得して、このカードに割り当てる
-        Transform snapPoint = 
-            candidateZone.GetAvailableSnapPoint(gameObject);
-
-        if (snapPoint == null) 
-           return;
+        // Reserve the new slot before releasing the old one. Full/invalid targets
+        // return the card to its prior position without changing the answer.
+        Transform snapPoint = candidateZone.GetAvailableSnapPoint(gameObject);
+        if (snapPoint == null)
+        {
+            RestorePreviousPlacement();
+            return;
+        }
+        if (currentZone != null && currentZone != candidateZone)
+            currentZone.ReleaseCard(gameObject);
 
         if (!rb.isKinematic)
         {

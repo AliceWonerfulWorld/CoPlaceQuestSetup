@@ -33,6 +33,7 @@ public class CandidateMarkerManager : MonoBehaviour
     [SerializeField] private List<CardImageBinding> cardImages = new List<CardImageBinding>();
     [SerializeField, Min(1)] private int columns = 4;
     [SerializeField] private Vector2 cardWorldSize = new Vector2(0.344f, 0.272f);
+    [SerializeField] private Vector2 layoutArea = new Vector2(2.3f, 0.56f);
     [SerializeField] private Vector2 cardSpacing = new Vector2(0.036f, 0.016f);
 
     [SerializeField]
@@ -196,14 +197,22 @@ public class CandidateMarkerManager : MonoBehaviour
             int participantOrder = markerDisplayIds[left].CompareTo(markerDisplayIds[right]);
             return participantOrder != 0 ? participantOrder : string.CompareOrdinal(left, right);
         });
-        int columnCount = Mathf.Max(1, columns);
+        if (keys.Count == 0) return;
+        float width = Mathf.Max(0.1f, layoutArea.x);
+        float height = Mathf.Max(0.1f, layoutArea.y);
+        int capacity = Mathf.Max(1, Mathf.FloorToInt((width + cardSpacing.x) / (cardWorldSize.x + cardSpacing.x)));
+        int fullSizeRows = Mathf.Max(1, Mathf.FloorToInt((height + cardSpacing.y) / (cardWorldSize.y + cardSpacing.y)));
+        int columnCount = Mathf.Clamp(Mathf.Max(columns, Mathf.CeilToInt((float)keys.Count / fullSizeRows)), 1, capacity);
         int rows = Mathf.CeilToInt((float)keys.Count / columnCount);
+        float scale = Mathf.Min(1f, width / (Mathf.Min(columnCount, keys.Count) * (cardWorldSize.x + cardSpacing.x) - cardSpacing.x),
+            height / (rows * (cardWorldSize.y + cardSpacing.y) - cardSpacing.y));
         for (int i = 0; i < keys.Count; i++)
         {
             int row = i / columnCount;
             int rowCount = Mathf.Min(columnCount, keys.Count - row * columnCount);
-            float x = (i % columnCount - (rowCount - 1) * 0.5f) * (cardWorldSize.x + cardSpacing.x);
-            float y = ((rows - 1) * 0.5f - row) * (cardWorldSize.y + cardSpacing.y);
+            float x = (i % columnCount - (rowCount - 1) * 0.5f) * (cardWorldSize.x + cardSpacing.x) * scale;
+            float y = ((rows - 1) * 0.5f - row) * (cardWorldSize.y + cardSpacing.y) * scale;
+            if (candidateCardPrefab != null) markers[keys[i]].transform.localScale = candidateCardPrefab.transform.localScale * scale;
             markers[keys[i]].transform.SetPositionAndRotation(origin.position + origin.rotation * new Vector3(x, y, 0), origin.rotation);
         }
     }
