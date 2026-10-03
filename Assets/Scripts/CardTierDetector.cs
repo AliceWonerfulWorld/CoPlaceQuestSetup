@@ -10,6 +10,12 @@ public class CardTierDetector : MonoBehaviour
     [SerializeField]
     private CandidateSyncTest candidateSync;
 
+    [SerializeField]
+    private ExperimentManager experimentManager;
+
+    [SerializeField]
+    private NormalPlacementSync normalPlacementSync;
+
     // 今カードが入っている可能性のあるTier
     private TierZone candidateZone;
 
@@ -107,8 +113,14 @@ public class CardTierDetector : MonoBehaviour
             $"{gameObject.name} classified as Tier {CurrentTier}"
             );
         
-        // 同期候補をNetSyncへ送信
-        if (candidateSync != null)
+        if (experimentManager != null &&
+            experimentManager.CurrentMode == ExperimentManager.ExperimentMode.Normal)
+        {
+            if (normalPlacementSync != null)
+                normalPlacementSync.SendPlacement(gameObject.name, CurrentTier);
+        }
+        // Proposedの候補・回答状態・selectedAtは既存処理をそのまま使用する。
+        else if (candidateSync != null)
         {
             if (CurrentTier == "Unclassified")
             {
@@ -124,5 +136,35 @@ public class CardTierDetector : MonoBehaviour
                 );
             }
         }
+    }
+
+    // Called only by NormalPlacementSync. This never calls OnReleased or sends variables.
+    // While held, return false so the synchronizer can retain the latest remote placement.
+    public bool ApplySyncedPlacement(TierZone zone)
+    {
+        if (normalPlacementSync == null || !normalPlacementSync.IsNormalMode
+            || zone == null || grabInteractable.isSelected)
+            return false;
+
+        Transform snapPoint = zone.GetAvailableSnapPoint(gameObject);
+        if (snapPoint == null) return false;
+
+        if (currentZone != null && currentZone != zone)
+            currentZone.ReleaseCard(gameObject);
+
+        // Clear both velocities before freezing, including a previously kinematic card.
+        rb.isKinematic = false;
+        rb.linearVelocity = Vector3.zero;
+        rb.angularVelocity = Vector3.zero;
+        rb.position = snapPoint.position;
+        rb.rotation = snapPoint.rotation;
+        transform.SetPositionAndRotation(snapPoint.position, snapPoint.rotation);
+        rb.isKinematic = true;
+
+        currentZone = zone;
+        candidateZone = zone;
+        CurrentTier = zone.tierName;
+        Debug.Log($"[Normal Placement Apply] {gameObject.name} -> Tier {CurrentTier}");
+        return true;
     }
 }

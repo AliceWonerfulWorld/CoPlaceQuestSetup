@@ -2173,6 +2173,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: '::'
   candidateSync: {fileID: 1952900592}
+  experimentManager: {fileID: 2006167391}
+  normalPlacementSync: {fileID: 1553814476}
 --- !u!114 &444559799
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2468,6 +2470,17 @@ Transform:
   m_Children: []
   m_Father: {fileID: 334554139}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &496949780 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 5729049226429455924, guid: e143c37e2b0944c278fd43733d72fa3b, type: 3}
+  m_PrefabInstance: {fileID: 760674791}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c0132303d300aa7479697a05d5e10784, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &601014835
 GameObject:
   m_ObjectHideFlags: 0
@@ -2857,7 +2870,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5729049226429455924, guid: e143c37e2b0944c278fd43733d72fa3b, type: 3}
       propertyPath: _serverAddress
-      value: 192.168.0.21
+      value: 192.168.1.211
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -4339,6 +4352,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: '::'
   candidateSync: {fileID: 1952900592}
+  experimentManager: {fileID: 2006167391}
+  normalPlacementSync: {fileID: 1553814476}
 --- !u!1 &1414074947
 GameObject:
   m_ObjectHideFlags: 0
@@ -4784,6 +4799,62 @@ RectTransform:
   m_AnchoredPosition: {x: 0.7828001, y: -0.15499961}
   m_SizeDelta: {x: 20, y: 5}
   m_Pivot: {x: 0.5, y: 0.5}
+--- !u!1 &1553814475
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1553814477}
+  - component: {fileID: 1553814476}
+  m_Layer: 0
+  m_Name: NormalPlacementSync
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1553814476
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1553814475}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4e8c336e07036498cb8d39b368ee475b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NormalPlacementSync
+  experimentManager: {fileID: 2006167391}
+  netSyncManager: {fileID: 496949780}
+  cards:
+  - {fileID: 1412968708}
+  - {fileID: 1992067530}
+  - {fileID: 444559798}
+  tierZones:
+  - {fileID: 1576515714}
+  - {fileID: 1102078215}
+  - {fileID: 1970596486}
+  - {fileID: 334554143}
+  - {fileID: 293280227}
+--- !u!4 &1553814477
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1553814475}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1576515709
 GameObject:
   m_ObjectHideFlags: 0
@@ -5661,6 +5732,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: '::'
   candidateSync: {fileID: 1952900592}
+  experimentManager: {fileID: 2006167391}
+  normalPlacementSync: {fileID: 1553814476}
 --- !u!114 &1992067531
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -6349,3 +6422,4 @@ SceneRoots:
   - {fileID: 2006167392}
   - {fileID: 1932141665}
   - {fileID: 1579307177}
+  - {fileID: 1553814477}
