@@ -1627,7 +1627,7 @@ Transform:
   m_GameObject: {fileID: 264080051}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -0.457, y: 0.18, z: -6.5}
+  m_LocalPosition: {x: 0, y: 0, z: -4.5000005}
   m_LocalScale: {x: 0.4, y: 2.5, z: 10}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -2464,7 +2464,7 @@ Transform:
   m_GameObject: {fileID: 471271927}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -0.451, y: -0.36, z: -6.5}
+  m_LocalPosition: {x: 0, y: -0.00000029802322, z: -4.5000005}
   m_LocalScale: {x: 0.4, y: 2.5, z: 10}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -2506,7 +2506,7 @@ Transform:
   m_GameObject: {fileID: 601014835}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -0.449, y: -0.43, z: -6.5}
+  m_LocalPosition: {x: 0, y: 0, z: -4.5000005}
   m_LocalScale: {x: 0.4, y: 2.5, z: 10}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -2951,7 +2951,7 @@ Transform:
   m_GameObject: {fileID: 860323294}
   serializedVersion: 2
   m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
-  m_LocalPosition: {x: -0.457, y: 0.04, z: -6.5}
+  m_LocalPosition: {x: 0, y: 0, z: -4.5000005}
   m_LocalScale: {x: 0.4, y: 2.5, z: 10}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -3304,6 +3304,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fbe9cd7c355f1472499451995ed40d80, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CandidateMarkerManager
+  cardImages:
+  - cardId: Card_01
+    cardImage: {fileID: 2800000, guid: 691ab02e198e249888dcf9513389da16, type: 3}
+  - cardId: Card_02
+    cardImage: {fileID: 2800000, guid: 1ac4ba296acd7415b9a5c794ce396172, type: 3}
+  - cardId: Card_03
+    cardImage: {fileID: 2800000, guid: e39e77a94c7f04d6e8b677b3649c106f, type: 3}
+  columns: 4
+  cardWorldSize: {x: 0.344, y: 0.272}
+  cardSpacing: {x: 0.036, y: 0.016}
   tierMarkerPoints:
   - tierName: A
     markerPoint: {fileID: 860323295}
