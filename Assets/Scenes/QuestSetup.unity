@@ -5515,6 +5515,8 @@ MonoBehaviour:
   candidateStatusText: {fileID: 2045499717}
   candidateMarkerManager: {fileID: 985478123}
   experimentManager: {fileID: 2006167391}
+  participantRegistry: {fileID: 2006167393}
+  netSyncManager: {fileID: 496949780}
 --- !u!4 &1952900593
 Transform:
   m_ObjectHideFlags: 0
@@ -6008,6 +6010,7 @@ GameObject:
   m_Component:
   - component: {fileID: 2006167392}
   - component: {fileID: 2006167391}
+  - component: {fileID: 2006167393}
   m_Layer: 0
   m_Name: ExperimentManager
   m_TagString: Untagged
@@ -6047,6 +6050,21 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2006167393
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2006167390}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0324142edad2443ea851d5907fe53f28, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ExperimentParticipantRegistry
+  netSyncManager: {fileID: 496949780}
+  localRole: 0
+  expectedParticipantCount: 2
 --- !u!1 &2038230306
 GameObject:
   m_ObjectHideFlags: 0

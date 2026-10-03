@@ -76,6 +76,27 @@ public class CardTierDetector : MonoBehaviour
 
     private void OnReleased(SelectExitEventArgs args)
     {
+        if (candidateSync != null && experimentManager != null &&
+            experimentManager.CurrentMode == ExperimentManager.ExperimentMode.Proposed &&
+            candidateSync.IsCardRevealed(gameObject.name))
+        {
+            // Keep the physical card consistent with the frozen revealed answer.
+            if (currentZone != null)
+            {
+                Transform previousPoint = currentZone.GetAvailableSnapPoint(gameObject);
+                if (previousPoint != null)
+                {
+                    rb.isKinematic = false;
+                    rb.linearVelocity = Vector3.zero;
+                    rb.angularVelocity = Vector3.zero;
+                    transform.SetPositionAndRotation(previousPoint.position, previousPoint.rotation);
+                    rb.isKinematic = true;
+                    candidateZone = currentZone;
+                }
+            }
+            Debug.LogWarning($"[Candidate] Reveal後のカード変更・取消は禁止: {gameObject.name}", this);
+            return;
+        }
         if (candidateZone == null)
            return;
 
