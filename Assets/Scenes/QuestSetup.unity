@@ -3304,6 +3304,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: fbe9cd7c355f1472499451995ed40d80, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CandidateMarkerManager
+  participantStyles:
+  - label: P1
+    color: {r: 0.28, g: 0.65, b: 1, a: 1}
+  - label: P2
+    color: {r: 1, g: 0.6, b: 0.3, a: 1}
   cardImages:
   - cardId: Card_01
     cardImage: {fileID: 2800000, guid: 691ab02e198e249888dcf9513389da16, type: 3}
@@ -3323,8 +3328,7 @@ MonoBehaviour:
     markerPoint: {fileID: 601014836}
   - tierName: D
     markerPoint: {fileID: 471271928}
-  participant1MarkerPrefab: {fileID: 3721828157553543839, guid: 9620dbf6e4d1e4638b83e09bf8e5e9f1, type: 3}
-  participant2MarkerPrefab: {fileID: 1341817779071350842, guid: abf90a0e4826d4ef383f987aef070724, type: 3}
+  candidateCardPrefab: {fileID: 9129447057854742011, guid: 6c9726b2137b94770a33d1b3bcc634f1, type: 3}
 --- !u!4 &985478124
 Transform:
   m_ObjectHideFlags: 0

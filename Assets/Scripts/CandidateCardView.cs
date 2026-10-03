@@ -9,9 +9,18 @@ public class CandidateCardView : MonoBehaviour
     [SerializeField] private TMP_Text participantLabel;
     [SerializeField] private TMP_Text cardLabel;
 
-    public void SetContent(int participantDisplayId, string cardId, Texture texture)
+    [SerializeField] private UnityEngine.UI.Image frame;
+    [SerializeField] private UnityEngine.UI.Image participantBadge;
+
+    public void SetContent(string label, Color accent, string cardId, Texture texture)
     {
-        if (participantLabel != null) participantLabel.text = $"P{participantDisplayId}";
+        if (participantLabel != null)
+        {
+            participantLabel.text = label;
+            participantLabel.color = new Color(accent.r, accent.g, accent.b, 1f);
+        }
+        if (frame != null) frame.color = new Color(accent.r, accent.g, accent.b, 0.72f);
+        if (participantBadge != null) participantBadge.color = new Color(accent.r, accent.g, accent.b, 0.13f);
         if (cardLabel != null) cardLabel.text = cardId;
         if (cardImage != null)
         {

@@ -16,6 +16,19 @@ public class CandidateMarkerManager : MonoBehaviour
         public string cardId;
         public Texture cardImage;
     }
+    [System.Serializable]
+    public class ParticipantStyle
+    {
+        public string label;
+        public Color color = new Color(0.28f, 0.65f, 1f);
+    }
+
+    [Header("Participant Styles (registration order)")]
+    [SerializeField] private List<ParticipantStyle> participantStyles = new List<ParticipantStyle>
+    {
+        new ParticipantStyle { label = "P1", color = new Color(0.28f, 0.65f, 1f) },
+        new ParticipantStyle { label = "P2", color = new Color(1f, 0.60f, 0.30f) }
+    };
     [Header("Candidate Card Presentation")]
     [SerializeField] private List<CardImageBinding> cardImages = new List<CardImageBinding>();
     [SerializeField, Min(1)] private int columns = 4;
@@ -26,10 +39,7 @@ public class CandidateMarkerManager : MonoBehaviour
     private List<TierMarkerPoint> tierMarkerPoints;
 
     [SerializeField]
-    private GameObject participant1MarkerPrefab;
-
-    [SerializeField]
-    private GameObject participant2MarkerPrefab;
+    private GameObject candidateCardPrefab;
 
     private Dictionary<string, GameObject> markers
         = new Dictionary<string, GameObject>();
@@ -66,22 +76,20 @@ public class CandidateMarkerManager : MonoBehaviour
 
         // 既存マーカーがあれば移動
         if (markers.ContainsKey(key) &&
-            (markers[key] == null || !markerDisplayIds.TryGetValue(key, out int oldDisplayId) || oldDisplayId != displayId))
+            markers[key] == null)
             ClearMarker(participantId, cardId);
         if (markers.ContainsKey(key))
         {
             string oldTier = markerTiers[key];
             markerTiers[key] = tierId;
+            markerDisplayIds[key] = displayId;
             SetCardContent(markers[key], displayId, cardId);
             if (oldTier != tierId) LayoutTier(oldTier);
             LayoutTier(tierId);
             return;
         }
 
-        GameObject prefab =
-            displayId == 1
-                ? participant1MarkerPrefab
-                : participant2MarkerPrefab;
+        GameObject prefab = candidateCardPrefab;
 
         if (prefab == null)
         {
@@ -154,7 +162,24 @@ public class CandidateMarkerManager : MonoBehaviour
         Texture image = null;
         foreach (var binding in cardImages)
             if (binding.cardId == cardId) { image = binding.cardImage; break; }
-        view.SetContent(displayId, cardId, image);
+        var style = GetParticipantStyle(displayId);
+        view.SetContent(style.label, style.color, cardId, image);
+    }
+
+    // Extra participants keep their own label and safely reuse the configured palette.
+    public ParticipantStyle GetParticipantStyle(int displayId)
+    {
+        int index = Mathf.Max(0, displayId - 1);
+        ParticipantStyle configured = participantStyles != null && index < participantStyles.Count
+            ? participantStyles[index] : null;
+        ParticipantStyle palette = participantStyles != null && participantStyles.Count > 0
+            ? participantStyles[index % participantStyles.Count] : null;
+        return new ParticipantStyle
+        {
+            label = configured != null && !string.IsNullOrWhiteSpace(configured.label)
+                ? configured.label : $"P{Mathf.Max(1, displayId)}",
+            color = configured != null ? configured.color : palette != null ? palette.color : new Color(0.28f, 0.65f, 1f)
+        };
     }
 
     private void LayoutTier(string tierId)
