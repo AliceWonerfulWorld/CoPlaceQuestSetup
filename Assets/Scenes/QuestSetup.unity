@@ -2870,7 +2870,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5729049226429455924, guid: e143c37e2b0944c278fd43733d72fa3b, type: 3}
       propertyPath: _serverAddress
-      value: 192.168.1.211
+      value: 192.168.0.43
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -6027,6 +6027,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3670688ea7cd64b17a4b40bffca85f9e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ExperimentManager
+  netSyncManager: {fileID: 496949780}
+  canChangeMode: 1
   currentMode: 1
   currentState: 0
   currentCardId: Card_01

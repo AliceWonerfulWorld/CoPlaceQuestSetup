@@ -8,6 +8,17 @@ public class ExperimentModeUI : MonoBehaviour
 
     private void OnEnable()
     {
+        if (experimentManager != null) experimentManager.OnModeChanged += OnModeChanged;
+        UpdateModeText();
+    }
+
+    private void OnDisable()
+    {
+        if (experimentManager != null) experimentManager.OnModeChanged -= OnModeChanged;
+    }
+
+    private void OnModeChanged(ExperimentManager.ExperimentMode mode)
+    {
         UpdateModeText();
     }
 
@@ -30,7 +41,7 @@ public class ExperimentModeUI : MonoBehaviour
         }
 
         experimentManager.SetMode(mode);
-        // Read the actual mode even when SetMode rejects a change outside Idle.
+        // Keeps the current confirmed display for rejected/pending requests.
         UpdateModeText();
     }
 
