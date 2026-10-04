@@ -4,9 +4,6 @@ using System.Text;
 using TMPro;
 using Styly.NetSync;
 using UnityEngine;
-#if UNITY_EDITOR
-using UnityEngine.InputSystem;
-#endif
 
 public class CandidateSyncTest : MonoBehaviour
 {
@@ -16,6 +13,48 @@ public class CandidateSyncTest : MonoBehaviour
     [SerializeField] private ExperimentParticipantRegistry participantRegistry;
     [SerializeField] private NetSyncManager netSyncManager;
     [SerializeField] private ExperimentSessionManager sessionManager;
+    [SerializeField, Tooltip("Stage 1: keep answers editable/private; legacy Reveal runs only after an explicit state transition.")]
+    private bool usePrivateAnswerBoard = true;
+    [SerializeField] private string[] answerCardIds = { "Card_01", "Card_02", "Card_03" };
+    public IReadOnlyList<string> AnswerCardIds => answerCardIds;
+    public int LocalClientNo => Network != null ? Network.ClientNo : 0;
+    public bool IsDataReady => Network != null && Network.IsReady && (sessionManager == null || !sessionManager.IsResettingSession);
+    public bool IsIndependentAnswerPhase => IsProposed && IsIndependentState(experimentManager.CurrentState);
+    public static bool IsIndependentState(ExperimentManager.ExperimentState state) =>
+        state == ExperimentManager.ExperimentState.Idle || state == ExperimentManager.ExperimentState.Answering ||
+        state == ExperimentManager.ExperimentState.WaitingForAnswers;
+    public readonly struct ParticipantAnswer
+    {
+        public readonly string CardId, Tier, SelectedAt;
+        public readonly bool Answered;
+        public ParticipantAnswer(string cardId, string tier, bool answered, string selectedAt)
+        { CardId = cardId; Tier = tier; Answered = answered; SelectedAt = selectedAt; }
+    }
+    // Data API only: callers must apply their own presentation/reveal policy.
+    public bool TryGetParticipantAnswer(int clientNo, string cardId, out ParticipantAnswer answer)
+    {
+        answer = default;
+        if (!IsDataReady || clientNo <= 0 || string.IsNullOrEmpty(cardId)) return false;
+        string tier = SessionVariableTransport.GetClientVariable(Network, sessionManager, "candidate_" + cardId, clientNo);
+        string flag = SessionVariableTransport.GetClientVariable(Network, sessionManager, "answered_" + cardId, clientNo);
+        string time = SessionVariableTransport.GetClientVariable(Network, sessionManager, "selectedAt_" + cardId, clientNo);
+        // Do not restore a partially delivered answer as a cancellation.
+        if (flag == "true" && IsValidTier(tier) && !string.IsNullOrEmpty(time))
+            answer = new ParticipantAnswer(cardId, tier, true, time);
+        else if (flag == "false" && tier == "Unclassified" && time == "")
+            answer = new ParticipantAnswer(cardId, tier, false, time);
+        else if (flag == null && tier == null && time == null)
+            answer = new ParticipantAnswer(cardId, "Unclassified", false, "");
+        else return false;
+        return true;
+    }
+    public IReadOnlyDictionary<string, ParticipantAnswer> GetParticipantCandidates(int clientNo)
+    {
+        var result = new Dictionary<string, ParticipantAnswer>();
+        foreach (string id in answerCardIds)
+            if (TryGetParticipantAnswer(clientNo, id, out var answer)) result[id] = answer;
+        return result;
+    }
     private readonly Dictionary<string, string> participantCandidates = new Dictionary<string, string>();
     private readonly Dictionary<string, bool> participantAnswered = new Dictionary<string, bool>();
     private readonly Dictionary<string, string> participantSelectedTimes = new Dictionary<string, string>();
@@ -76,42 +115,17 @@ public class CandidateSyncTest : MonoBehaviour
     private void Update()
     {
         Subscribe();
+        // Fail closed even while disconnected or waiting for Session Reset.
+        if (usePrivateAnswerBoard && experimentManager != null &&
+            experimentManager.CurrentMode == ExperimentManager.ExperimentMode.Proposed &&
+            IsIndependentState(experimentManager.CurrentState)) HideLegacyAnswerViews();
         if (subscribedManager == null || !subscribedManager.IsReady) networkWasReady = false;
         else if (!networkWasReady) OnReady();
-#if UNITY_EDITOR
-        HandleEditorTestInput();
-#endif
     }
-
-#if UNITY_EDITOR
-    private void HandleEditorTestInput()
-    {
-        // Keep experimenter shortcuts silent and leave Player/Quest input to
-        // CardTierDetector's real Grab/Release path.
-        if (!Application.isPlaying || !IsProposed || participantRegistry == null ||
-            !participantRegistry.IsLocalParticipant) return;
-        var keyboard = Keyboard.current;
-        if (keyboard == null) return;
-
-        string tier = null;
-        if (keyboard.digit1Key.wasPressedThisFrame) tier = "A";
-        else if (keyboard.digit2Key.wasPressedThisFrame) tier = "B";
-        else if (keyboard.digit3Key.wasPressedThisFrame) tier = "C";
-        else if (keyboard.digit4Key.wasPressedThisFrame) tier = "D";
-        else if (keyboard.digit0Key.wasPressedThisFrame)
-        {
-            Debug.Log("[Editor Test Cancel] Card_01");
-            CancelCandidate("Card_01");
-            return;
-        }
-        if (tier == null) return;
-        Debug.Log($"[Editor Test Answer] Card_01 -> Tier {tier}");
-        SendCandidate("Card_01", tier);
-    }
-#endif
     private bool CanSend(string cardId)
     {
-        if (!IsProposed || !isActiveAndEnabled || string.IsNullOrEmpty(cardId)) return false;
+        if (!IsIndependentAnswerPhase || !isActiveAndEnabled || string.IsNullOrEmpty(cardId) ||
+            Array.IndexOf(answerCardIds, cardId) < 0) return false;
         Subscribe();
         if (Network == null || !Network.IsReady || participantRegistry == null || !participantRegistry.IsLocalParticipant)
         {
@@ -132,26 +146,37 @@ public class CandidateSyncTest : MonoBehaviour
         return true;
     }
     public void SendCandidate(string cardId, string tierId)
+        => TrySetCandidate(cardId, tierId, out _);
+    public bool TrySetCandidate(string cardId, string tierId, out ParticipantAnswer submitted)
     {
-        if (tierId == "Unclassified") { CancelCandidate(cardId); return; }
-        if (!IsValidTier(tierId) || !CanSend(cardId)) return;
+        submitted = default;
+        if (tierId == "Unclassified") return TryCancelCandidate(cardId, out submitted);
+        if (!IsValidTier(tierId) || !CanSend(cardId)) return false;
         string selectedAt = DateTime.UtcNow.ToString("o");
         // Commit answered last; LateUpdate waits for the complete received payload.
         bool candidate = SessionVariableTransport.SetClientVariable(Network, sessionManager, $"candidate_{cardId}", tierId);
         bool time = SessionVariableTransport.SetClientVariable(Network, sessionManager, $"selectedAt_{cardId}", selectedAt);
         bool answered = candidate && time && SessionVariableTransport.SetClientVariable(Network, sessionManager, $"answered_{cardId}", "true");
-        if (!answered) { Debug.LogWarning($"[Candidate] Send failed: {cardId}", this); return; }
-        if (experimentManager.CurrentState == ExperimentManager.ExperimentState.Idle) experimentManager.StartCard(cardId);
+        if (!answered) { Debug.LogWarning($"[Candidate] Send failed: {cardId}", this); return false; }
+        submitted = new ParticipantAnswer(cardId, tierId, true, selectedAt);
+        if (experimentManager.CurrentState == ExperimentManager.ExperimentState.Idle)
+            experimentManager.SetState(ExperimentManager.ExperimentState.Answering);
         Debug.Log($"[Candidate Send] Client {Network.ClientNo} / {cardId} / Tier {tierId} / Answered true / SelectedAt {selectedAt}");
+        return true;
     }
     public void CancelCandidate(string cardId)
+        => TryCancelCandidate(cardId, out _);
+    private bool TryCancelCandidate(string cardId, out ParticipantAnswer submitted)
     {
-        if (!CanSend(cardId)) return;
+        submitted = default;
+        if (!CanSend(cardId)) return false;
         bool answered = SessionVariableTransport.SetClientVariable(Network, sessionManager, $"answered_{cardId}", "false");
         bool candidate = SessionVariableTransport.SetClientVariable(Network, sessionManager, $"candidate_{cardId}", "Unclassified");
         bool time = SessionVariableTransport.SetClientVariable(Network, sessionManager, $"selectedAt_{cardId}", "");
-        if (!answered || !candidate || !time) Debug.LogWarning($"[Candidate] Cancel send failed: {cardId}", this);
+        if (!answered || !candidate || !time) { Debug.LogWarning($"[Candidate] Cancel send failed: {cardId}", this); return false; }
+        submitted = new ParticipantAnswer(cardId, "Unclassified", false, "");
         Debug.Log($"[Candidate Cancel] Client {Network.ClientNo} / {cardId} / Answered false");
+        return true;
     }
     private void OnClientVariableChanged(int client, string name, string oldValue, string newValue)
     {
@@ -193,15 +218,28 @@ public class CandidateSyncTest : MonoBehaviour
     {
         if (mode != ExperimentManager.ExperimentMode.Proposed)
         {
-            if (candidateMarkerManager != null) candidateMarkerManager.ClearAllMarkers();
-            if (candidateStatusText != null) candidateStatusText.text = "";
+            HideLegacyAnswerViews();
         }
         else QueueAllCards();
+    }
+    private void HideLegacyAnswerViews()
+    {
+        if (candidateMarkerManager != null) candidateMarkerManager.ClearAllMarkers();
+        if (candidateStatusText != null && candidateStatusText.text != "") candidateStatusText.text = "";
     }
     private void LateUpdate()
     {
         if (!IsProposed || subscribedManager == null || !subscribedManager.IsReady || participantRegistry == null) return;
         participantRegistry.RefreshParticipants();
+        if (usePrivateAnswerBoard && IsIndependentAnswerPhase)
+        {
+            // Stage 1 has no automatic reveal. Never expose remote answers via
+            // legacy markers/status, even when a single card has all its answers.
+            if (candidateMarkerManager != null) candidateMarkerManager.ClearAllMarkers();
+            if (candidateStatusText != null) candidateStatusText.text = "";
+            UpdatePrivateAnswerState();
+            return;
+        }
         if (previousCurrentCard != experimentManager.CurrentCardId)
         {
             previousCurrentCard = experimentManager.CurrentCardId;
@@ -295,6 +333,7 @@ public class CandidateSyncTest : MonoBehaviour
     }
     private void UpdateExperimentState()
     {
+        if (usePrivateAnswerBoard) return; // Explicit Reveal states must not regress.
         string card = experimentManager.CurrentCardId;
         var current = experimentManager.CurrentState;
         if (current == ExperimentManager.ExperimentState.Discussion || current == ExperimentManager.ExperimentState.Confirmed) return;
@@ -310,6 +349,19 @@ public class CandidateSyncTest : MonoBehaviour
             next = selfAnswered ? ExperimentManager.ExperimentState.WaitingForAnswers : ExperimentManager.ExperimentState.Answering;
         }
         if (current != next) experimentManager.SetState(next);
+    }
+    private void UpdatePrivateAnswerState()
+    {
+        if (!participantRegistry.IsLocalParticipant || !IsIndependentAnswerPhase) return;
+        bool any = false, all = answerCardIds.Length > 0;
+        foreach (string id in answerCardIds)
+        {
+            bool answered = TryGetParticipantAnswer(LocalClientNo, id, out var answer) && answer.Answered;
+            any |= answered; all &= answered;
+        }
+        var next = all ? ExperimentManager.ExperimentState.WaitingForAnswers :
+            any ? ExperimentManager.ExperimentState.Answering : ExperimentManager.ExperimentState.Idle;
+        if (experimentManager.CurrentState != next) experimentManager.SetState(next);
     }
     public void ResetLocalSession()
     {

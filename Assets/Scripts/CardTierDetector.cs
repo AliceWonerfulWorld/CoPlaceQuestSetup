@@ -7,14 +7,11 @@ public class CardTierDetector : MonoBehaviour, UnityEngine.XR.Interaction.Toolki
     public bool canProcess => isActiveAndEnabled;
     public bool Process(UnityEngine.XR.Interaction.Toolkit.Interactors.IXRSelectInteractor interactor,
         UnityEngine.XR.Interaction.Toolkit.Interactables.IXRSelectInteractable interactable)
-        => normalPlacementSync == null || (!normalPlacementSync.IsResettingSession &&
-            (!normalPlacementSync.IsNormalMode || (!normalPlacementSync.IsLocalInteractionLocked && !normalPlacementSync.IsCardConfirmed(gameObject.name))));
+        => experimentManager != null && experimentManager.CurrentMode == ExperimentManager.ExperimentMode.Normal &&
+            (normalPlacementSync == null || (!normalPlacementSync.IsResettingSession &&
+            !normalPlacementSync.IsLocalInteractionLocked && !normalPlacementSync.IsCardConfirmed(gameObject.name)));
 
     public string CurrentTier { get; private set; } = "Unclassified";
-
-    // 候補同期用
-    [SerializeField]
-    private CandidateSyncTest candidateSync;
 
     [SerializeField]
     private ExperimentManager experimentManager;
@@ -107,7 +104,8 @@ public class CardTierDetector : MonoBehaviour, UnityEngine.XR.Interaction.Toolki
 
     private void Update()
     {
-        TierZone target = grabInteractable != null && grabInteractable.isSelected ? FindDropZone() : null;
+        TierZone target = experimentManager != null && experimentManager.CurrentMode == ExperimentManager.ExperimentMode.Normal &&
+            grabInteractable != null && grabInteractable.isSelected ? FindDropZone() : null;
         if (target == hoveredZone) return;
         if (hoveredZone != null) hoveredZone.SetHovered(gameObject, false);
         hoveredZone = target;
@@ -173,25 +171,9 @@ public class CardTierDetector : MonoBehaviour, UnityEngine.XR.Interaction.Toolki
         if (normalPlacementSync != null && normalPlacementSync.RejectLocalInteraction(gameObject.name)) return;
         if (hoveredZone != null) hoveredZone.SetHovered(gameObject, false);
         hoveredZone = null;
-        if (candidateSync != null && experimentManager != null &&
-            experimentManager.CurrentMode == ExperimentManager.ExperimentMode.Proposed &&
-            candidateSync.IsCardRevealed(gameObject.name))
+        if (experimentManager == null || experimentManager.CurrentMode != ExperimentManager.ExperimentMode.Normal)
         {
-            // Keep the physical card consistent with the frozen revealed answer.
-            if (currentZone != null)
-            {
-                Transform previousPoint = currentZone.GetAvailableSnapPoint(gameObject);
-                if (previousPoint != null)
-                {
-                    rb.isKinematic = false;
-                    rb.linearVelocity = Vector3.zero;
-                    rb.angularVelocity = Vector3.zero;
-                    transform.SetPositionAndRotation(previousPoint.position, previousPoint.rotation);
-                    rb.isKinematic = true;
-                    candidateZone = currentZone;
-                }
-            }
-            Debug.LogWarning($"[Candidate] Reveal後のカード変更・取消は禁止: {gameObject.name}", this);
+            RestorePreviousPlacement();
             return;
         }
         candidateZone = FindDropZone();
@@ -238,23 +220,7 @@ public class CardTierDetector : MonoBehaviour, UnityEngine.XR.Interaction.Toolki
             if (normalPlacementSync != null)
                 normalPlacementSync.SendPlacement(gameObject.name, CurrentTier);
         }
-        // Proposedの候補・回答状態・selectedAtは既存処理をそのまま使用する。
-        else if (candidateSync != null)
-        {
-            if (CurrentTier == "Unclassified")
-            {
-                candidateSync.CancelCandidate(
-                    gameObject.name
-                );
-            }
-            else
-            {
-                candidateSync.SendCandidate(
-                    gameObject.name,
-                    CurrentTier
-                );
-            }
-        }
+
     }
 
     public void ResetSessionPlacement(TierZone zone)
