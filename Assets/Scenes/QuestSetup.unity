@@ -5927,7 +5927,7 @@ Canvas:
   m_OverridePixelPerfect: 0
   m_SortingBucketNormalizedSize: 0
   m_VertexColorAlwaysGammaSpace: 0
-  m_AdditionalShaderChannelsFlag: 0
+  m_AdditionalShaderChannelsFlag: 25
   m_UpdateRectTransformForStandalone: 0
   m_SortingLayerID: 0
   m_SortingOrder: 2
@@ -10517,7 +10517,7 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2
@@ -12353,6 +12353,7 @@ MonoBehaviour:
   finalAgreement: {fileID: 1553814478}
   experimentManager: {fileID: 2006167391}
   netSyncManager: {fileID: 496949780}
+  sessionManager: {fileID: 2006167394}
   cards:
   - {fileID: 1412968708}
   - {fileID: 1992067530}
@@ -12394,6 +12395,7 @@ MonoBehaviour:
   participantRegistry: {fileID: 2006167393}
   placementSync: {fileID: 1553814476}
   netSyncManager: {fileID: 496949780}
+  sessionManager: {fileID: 2006167394}
 --- !u!1 &1561157551
 GameObject:
   m_ObjectHideFlags: 0
@@ -13668,7 +13670,7 @@ MonoBehaviour:
   m_fontMaterials: []
   m_fontColor32:
     serializedVersion: 2
-    rgba: 4294967295
+    rgba: 4294768626
   m_fontColor: {r: 0.95, g: 0.97, b: 0.99, a: 1}
   m_enableVertexGradient: 0
   m_colorMode: 3
@@ -13681,7 +13683,7 @@ MonoBehaviour:
   m_spriteAsset: {fileID: 0}
   m_tintAllSprites: 0
   m_StyleSheet: {fileID: 0}
-  m_TextStyleHashCode: 0
+  m_TextStyleHashCode: -1183493901
   m_overrideHtmlColors: 0
   m_faceColor:
     serializedVersion: 2
@@ -14183,6 +14185,7 @@ MonoBehaviour:
   experimentManager: {fileID: 2006167391}
   participantRegistry: {fileID: 2006167393}
   netSyncManager: {fileID: 496949780}
+  sessionManager: {fileID: 2006167394}
 --- !u!4 &1952900593
 Transform:
   m_ObjectHideFlags: 0
@@ -14838,6 +14841,7 @@ GameObject:
   - component: {fileID: 2006167392}
   - component: {fileID: 2006167391}
   - component: {fileID: 2006167393}
+  - component: {fileID: 2006167394}
   m_Layer: 0
   m_Name: ExperimentManager
   m_TagString: Untagged
@@ -14858,6 +14862,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ExperimentManager
   netSyncManager: {fileID: 496949780}
+  sessionManager: {fileID: 2006167394}
   canChangeMode: 1
   currentMode: 1
   currentState: 0
@@ -14892,6 +14897,25 @@ MonoBehaviour:
   netSyncManager: {fileID: 496949780}
   localRole: 0
   expectedParticipantCount: 2
+--- !u!114 &2006167394
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2006167390}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 76194810537ce4ecca37ab16de6ffc07, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::ExperimentSessionManager
+  netSyncManager: {fileID: 496949780}
+  participantRegistry: {fileID: 2006167393}
+  experimentManager: {fileID: 2006167391}
+  normalPlacementSync: {fileID: 1553814476}
+  candidateSync: {fileID: 1952900592}
+  finalAgreement: {fileID: 1553814478}
+  agreementUI: {fileID: 703521807}
 --- !u!1 &2026467368
 GameObject:
   m_ObjectHideFlags: 0

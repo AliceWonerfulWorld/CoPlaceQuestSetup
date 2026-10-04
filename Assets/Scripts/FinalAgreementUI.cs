@@ -39,6 +39,7 @@ public class FinalAgreementUI : MonoBehaviour
         float height = Mathf.Max(430, 230 + agreement.Participants.Count * 58 + (!string.IsNullOrEmpty(agreement.StatusMessage) ? 100 : 0));
         var rect = (RectTransform)transform; rect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, height);
     }
+    public void ResetLocalSession() { lastAcceptedClickTime = float.NegativeInfinity; duplicateClickLogged = false; lastText = null; }
     public void ToggleReady()
     {
         if (agreement == null || !agreement.CanToggleReady) return;

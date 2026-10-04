@@ -56,11 +56,12 @@ public partial class NormalPlacementSync
     }
     public bool RejectLocalInteraction(string cardId)
     {
+        if (IsResettingSession) return true;
         if (RejectConfirmedPlacement(cardId)) return true;
         if (!IsLocalInteractionLocked) return false;
         Debug.LogWarning("[Card Interaction Rejected] Local participant is already ready", this);
         // Remote updates still use ApplySyncedPlacement and are allowed while locally Ready.
-        string tier = subscribedManager != null && subscribedManager.IsReady ? subscribedManager.GetGlobalVariable(VariablePrefix + cardId) : null;
+        string tier = subscribedManager != null && subscribedManager.IsReady ? SessionVariableTransport.GetGlobalVariable(subscribedManager, sessionManager, VariablePrefix + cardId) : null;
         if (tier != null && zonesByTier.TryGetValue(tier, out var zone) && GetCard(cardId) != null) GetCard(cardId).ApplySyncedPlacement(zone);
         return true;
     }

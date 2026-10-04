@@ -7,8 +7,8 @@ public class CardTierDetector : MonoBehaviour, UnityEngine.XR.Interaction.Toolki
     public bool canProcess => isActiveAndEnabled;
     public bool Process(UnityEngine.XR.Interaction.Toolkit.Interactors.IXRSelectInteractor interactor,
         UnityEngine.XR.Interaction.Toolkit.Interactables.IXRSelectInteractable interactable)
-        => normalPlacementSync == null || !normalPlacementSync.IsNormalMode ||
-            (!normalPlacementSync.IsLocalInteractionLocked && !normalPlacementSync.IsCardConfirmed(gameObject.name));
+        => normalPlacementSync == null || (!normalPlacementSync.IsResettingSession &&
+            (!normalPlacementSync.IsNormalMode || (!normalPlacementSync.IsLocalInteractionLocked && !normalPlacementSync.IsCardConfirmed(gameObject.name))));
 
     public string CurrentTier { get; private set; } = "Unclassified";
 
@@ -255,6 +255,24 @@ public class CardTierDetector : MonoBehaviour, UnityEngine.XR.Interaction.Toolki
                 );
             }
         }
+    }
+
+    public void ResetSessionPlacement(TierZone zone)
+    {
+        // Disabling releases any current XR selection; reset guards suppress its exit send.
+        SetNormalConfirmationLock(false, null);
+        bool enabled = grabInteractable.enabled;
+        grabInteractable.enabled = false;
+        if (currentZone != null) currentZone.ReleaseCard(gameObject);
+        if (hoveredZone != null) hoveredZone.SetHovered(gameObject, false);
+        hoveredZone = null; currentZone = candidateZone = null;
+        Transform point = zone.GetAvailableSnapPoint(gameObject);
+        if (point == null) { grabInteractable.enabled = enabled; throw new System.InvalidOperationException("Unclassified SnapPoint missing: " + name); }
+        rb.isKinematic = false; rb.linearVelocity = Vector3.zero; rb.angularVelocity = Vector3.zero;
+        rb.position = point.position; rb.rotation = point.rotation;
+        transform.SetPositionAndRotation(point.position, point.rotation); rb.isKinematic = true;
+        currentZone = candidateZone = zone; CurrentTier = zone.tierName;
+        grabInteractable.enabled = enabled;
     }
 
     // Called only by NormalPlacementSync. This never calls OnReleased or sends variables.

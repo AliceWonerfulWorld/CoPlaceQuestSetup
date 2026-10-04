@@ -9,6 +9,7 @@ public class ExperimentManager : MonoBehaviour
 
    [Header("Room Mode Sync")]
    [SerializeField] private NetSyncManager netSyncManager;
+    [SerializeField] private ExperimentSessionManager sessionManager;
    [SerializeField] private bool canChangeMode = true;
    private NetSyncManager subscribedManager;
    private bool started;
@@ -101,7 +102,7 @@ public class ExperimentManager : MonoBehaviour
        if (!initializationRequested && Time.unscaledTime >= nextInitializationAttempt)
        {
            nextInitializationAttempt = Time.unscaledTime + 1;
-           if (subscribedManager.GetGlobalVariable(ModeVariable) == null) RestoreRoomMode();
+           if (SessionVariableTransport.GetGlobalVariable(subscribedManager, sessionManager, ModeVariable) == null) RestoreRoomMode();
            else initializationRequested = true;
        }
    }
@@ -119,7 +120,7 @@ public class ExperimentManager : MonoBehaviour
    private void RestoreRoomMode()
    {
        if (subscribedManager == null || !subscribedManager.IsReady) return;
-       string value = subscribedManager.GetGlobalVariable(ModeVariable);
+       string value = SessionVariableTransport.GetGlobalVariable(subscribedManager, sessionManager, ModeVariable);
        if (value == null)
        {
            // A fixed initial Room default avoids conflicting Inspector defaults
@@ -134,9 +135,9 @@ public class ExperimentManager : MonoBehaviour
 
    private void PublishState()
    {
-       if (subscribedManager == null || !subscribedManager.IsReady) return;
+       if ((sessionManager != null && sessionManager.IsResettingSession) || subscribedManager == null || !subscribedManager.IsReady) return;
        string value = currentState.ToString();
-       if (publishedState != value && subscribedManager.SetClientVariable(StateVariable, value))
+       if (publishedState != value && SessionVariableTransport.SetClientVariable(subscribedManager, sessionManager, StateVariable, value))
            publishedState = value;
    }
 
@@ -146,7 +147,7 @@ public class ExperimentManager : MonoBehaviour
        {
            if (client == subscribedManager.ClientNo) continue;
            // Unknown/new peers are fail-closed until their state arrives.
-           if (subscribedManager.GetClientVariable(StateVariable, client) != ExperimentState.Idle.ToString())
+           if (SessionVariableTransport.GetClientVariable(subscribedManager, sessionManager, StateVariable, client) != ExperimentState.Idle.ToString())
                return false;
        }
        return true;
@@ -154,7 +155,7 @@ public class ExperimentManager : MonoBehaviour
 
    private bool SendMode(ExperimentMode mode)
    {
-       bool accepted = subscribedManager.SetGlobalVariable(ModeVariable, mode.ToString());
+       bool accepted = SessionVariableTransport.SetGlobalVariable(subscribedManager, sessionManager, ModeVariable, mode.ToString());
        if (accepted)
            Debug.Log($"[Experiment Mode Send] Client {subscribedManager.ClientNo} / {mode}");
        else
@@ -196,6 +197,7 @@ public class ExperimentManager : MonoBehaviour
 
    public void SetMode(ExperimentMode mode)
    {
+        if (sessionManager != null && sessionManager.IsResettingSession) return;
         if (currentState != ExperimentState.Idle)
         {
             Debug.LogWarning(
@@ -216,13 +218,14 @@ public class ExperimentManager : MonoBehaviour
             Debug.LogWarning("[ExperimentManager] 接続中の参加者がIdleではない、または状態未取得のため方式変更を拒否しました", this);
             return;
         }
-        if (subscribedManager.GetGlobalVariable(ModeVariable) == mode.ToString()) return;
+        if (SessionVariableTransport.GetGlobalVariable(subscribedManager, sessionManager, ModeVariable) == mode.ToString()) return;
         if (SendMode(mode)) initializationRequested = true;
         // CurrentMode changes only through Room receive/restore.
    }
 
    public void StartCard(string cardId)
    {
+        if (sessionManager != null && sessionManager.IsResettingSession) return;
         currentCardId = cardId;
         currentState = ExperimentState.Answering;
         PublishState();
@@ -234,6 +237,7 @@ public class ExperimentManager : MonoBehaviour
 
    public void SetState(ExperimentState newState)
    {
+        if (sessionManager != null && sessionManager.IsResettingSession && newState != ExperimentState.Idle) return;
         currentState = newState;
         if (currentState == ExperimentState.Idle) RestoreRoomMode();
         PublishState();
@@ -243,8 +247,15 @@ public class ExperimentManager : MonoBehaviour
         );
    }
 
+   public void RestoreSessionState()
+   {
+       string value = subscribedManager != null && subscribedManager.IsReady ? SessionVariableTransport.GetClientVariable(subscribedManager, sessionManager, StateVariable) : null;
+       if (Enum.TryParse(value, out ExperimentState restored) && Enum.IsDefined(typeof(ExperimentState), restored)) currentState = restored;
+       publishedState = null; PublishState();
+   }
    public void ResetExperiment()
    {
+      publishedState = null;
       currentState = ExperimentState.Idle;
       currentCardId = "Card_01";
       RestoreRoomMode();

@@ -15,6 +15,7 @@ public class CandidateSyncTest : MonoBehaviour
     [SerializeField] private ExperimentManager experimentManager;
     [SerializeField] private ExperimentParticipantRegistry participantRegistry;
     [SerializeField] private NetSyncManager netSyncManager;
+    [SerializeField] private ExperimentSessionManager sessionManager;
     private readonly Dictionary<string, string> participantCandidates = new Dictionary<string, string>();
     private readonly Dictionary<string, bool> participantAnswered = new Dictionary<string, bool>();
     private readonly Dictionary<string, string> participantSelectedTimes = new Dictionary<string, string>();
@@ -27,7 +28,7 @@ public class CandidateSyncTest : MonoBehaviour
     private bool started, networkWasReady;
     private string previousCurrentCard;
     private class RevealedCandidate { public int clientNo, displayId; public string tier, selectedAt; }
-    private bool IsProposed => experimentManager != null && experimentManager.CurrentMode == ExperimentManager.ExperimentMode.Proposed;
+    private bool IsProposed => (sessionManager == null || !sessionManager.IsResettingSession) && experimentManager != null && experimentManager.CurrentMode == ExperimentManager.ExperimentMode.Proposed;
     private NetSyncManager Network => netSyncManager != null ? netSyncManager : NetSyncManager.Instance;
     public bool IsCardRevealed(string cardId) => IsProposed && revealedCards.ContainsKey(cardId);
     private static bool IsValidTier(string tier) => tier == "A" || tier == "B" || tier == "C" || tier == "D";
@@ -61,7 +62,7 @@ public class CandidateSyncTest : MonoBehaviour
     }
     private void OnReady()
     {
-        if (subscribedManager == null || !subscribedManager.IsReady) return;
+        if ((sessionManager != null && sessionManager.IsResettingSession) || subscribedManager == null || !subscribedManager.IsReady) return;
         networkWasReady = true;
         participantCandidates.Clear(); participantAnswered.Clear(); participantSelectedTimes.Clear();
         revealedCards.Clear(); checkLogs.Clear(); visibilityLogs.Clear(); rejectedChanges.Clear();
@@ -136,9 +137,9 @@ public class CandidateSyncTest : MonoBehaviour
         if (!IsValidTier(tierId) || !CanSend(cardId)) return;
         string selectedAt = DateTime.UtcNow.ToString("o");
         // Commit answered last; LateUpdate waits for the complete received payload.
-        bool candidate = Network.SetClientVariable($"candidate_{cardId}", tierId);
-        bool time = Network.SetClientVariable($"selectedAt_{cardId}", selectedAt);
-        bool answered = candidate && time && Network.SetClientVariable($"answered_{cardId}", "true");
+        bool candidate = SessionVariableTransport.SetClientVariable(Network, sessionManager, $"candidate_{cardId}", tierId);
+        bool time = SessionVariableTransport.SetClientVariable(Network, sessionManager, $"selectedAt_{cardId}", selectedAt);
+        bool answered = candidate && time && SessionVariableTransport.SetClientVariable(Network, sessionManager, $"answered_{cardId}", "true");
         if (!answered) { Debug.LogWarning($"[Candidate] Send failed: {cardId}", this); return; }
         if (experimentManager.CurrentState == ExperimentManager.ExperimentState.Idle) experimentManager.StartCard(cardId);
         Debug.Log($"[Candidate Send] Client {Network.ClientNo} / {cardId} / Tier {tierId} / Answered true / SelectedAt {selectedAt}");
@@ -146,9 +147,9 @@ public class CandidateSyncTest : MonoBehaviour
     public void CancelCandidate(string cardId)
     {
         if (!CanSend(cardId)) return;
-        bool answered = Network.SetClientVariable($"answered_{cardId}", "false");
-        bool candidate = Network.SetClientVariable($"candidate_{cardId}", "Unclassified");
-        bool time = Network.SetClientVariable($"selectedAt_{cardId}", "");
+        bool answered = SessionVariableTransport.SetClientVariable(Network, sessionManager, $"answered_{cardId}", "false");
+        bool candidate = SessionVariableTransport.SetClientVariable(Network, sessionManager, $"candidate_{cardId}", "Unclassified");
+        bool time = SessionVariableTransport.SetClientVariable(Network, sessionManager, $"selectedAt_{cardId}", "");
         if (!answered || !candidate || !time) Debug.LogWarning($"[Candidate] Cancel send failed: {cardId}", this);
         Debug.Log($"[Candidate Cancel] Client {Network.ClientNo} / {cardId} / Answered false");
     }
@@ -158,7 +159,9 @@ public class CandidateSyncTest : MonoBehaviour
     }
     private void StoreVariable(int client, string name, string value)
     {
-        if (string.IsNullOrEmpty(name)) return;
+        if ((sessionManager != null && sessionManager.IsResettingSession) || string.IsNullOrEmpty(name)) return;
+        value = SessionVariableTransport.Decode(sessionManager, value);
+        if (value == null) return;
         string card;
         if (name.StartsWith("candidate_", StringComparison.Ordinal))
         {
@@ -223,9 +226,9 @@ public class CandidateSyncTest : MonoBehaviour
         foreach (int client in participants)
         {
             string key = Key(client, card);
-            string tier = subscribedManager.GetClientVariable("candidate_" + card, client);
-            string time = subscribedManager.GetClientVariable("selectedAt_" + card, client);
-            bool answered = subscribedManager.GetClientVariable("answered_" + card, client) == "true";
+            string tier = SessionVariableTransport.GetClientVariable(subscribedManager, sessionManager, "candidate_" + card, client);
+            string time = SessionVariableTransport.GetClientVariable(subscribedManager, sessionManager, "selectedAt_" + card, client);
+            bool answered = SessionVariableTransport.GetClientVariable(subscribedManager, sessionManager, "answered_" + card, client) == "true";
             participantCandidates[key] = tier;
             participantAnswered[key] = answered;
             participantSelectedTimes[key] = time;
@@ -308,6 +311,15 @@ public class CandidateSyncTest : MonoBehaviour
         }
         if (current != next) experimentManager.SetState(next);
     }
+    public void ResetLocalSession()
+    {
+        participantCandidates.Clear(); participantAnswered.Clear(); participantSelectedTimes.Clear();
+        revealedCards.Clear(); dirtyCards.Clear(); checkLogs.Clear(); visibilityLogs.Clear(); rejectedChanges.Clear();
+        previousCurrentCard = null; networkWasReady = false;
+        if (candidateMarkerManager != null) candidateMarkerManager.ClearAllMarkers();
+        if (candidateStatusText != null) candidateStatusText.text = "";
+    }
+    public void RestoreSessionCandidates() { Subscribe(); OnReady(); }
     private void UpdateCandidateDisplay()
     {
         if (candidateStatusText == null) return;
