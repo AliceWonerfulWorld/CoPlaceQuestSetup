@@ -17,6 +17,8 @@ public class ExperimentSessionManager : MonoBehaviour
     [SerializeField] private FinalAgreementManager finalAgreement;
     [SerializeField] private FinalAgreementUI agreementUI;
     private NetSyncManager network;
+    private readonly Queue<string> pendingControls = new Queue<string>();
+    private string observedControl;
     [Serializable] private class Control { public string id; public string startedAt; public string activatedAt; public string phase; public int owner; public string mode; public long epoch; }
     private Control control;
     private readonly Dictionary<string, string> globalCache = new Dictionary<string, string>();
@@ -54,6 +56,7 @@ public class ExperimentSessionManager : MonoBehaviour
     {
         if (network != null) { network.OnReady.RemoveListener(OnReady); network.OnGlobalVariableChanged.RemoveListener(OnGlobal); network.OnClientVariableChanged.RemoveListener(OnClient); }
         network = null; wasReady = false;
+        pendingControls.Clear(); observedControl = null;
     }
     private void Subscribe()
     {
@@ -69,11 +72,11 @@ public class ExperimentSessionManager : MonoBehaviour
         if (network == null || !network.IsReady) return;
         wasReady = true;
         // Reconnection restores the current session; it never creates a new one.
-        ReadControl(network.GetGlobalVariable(ControlVariable));
+        pendingControls.Enqueue(network.GetGlobalVariable(ControlVariable));
     }
     private void OnGlobal(string name, string oldValue, string value)
     {
-        if (name == ControlVariable) { ReadControl(value); return; }
+        if (name == ControlVariable) { pendingControls.Enqueue(value); return; }
         if (control == null || !IsExperimentGlobal(name)) return;
         string current = SessionVariableTransport.Decode(this, value);
         if (current != null) { globalCache[name] = current; return; }
@@ -124,7 +127,7 @@ public class ExperimentSessionManager : MonoBehaviour
             localDefaultsQueued = network.GetClientVariable(AckVariable) == next.id;
         }
         if (next.phase == "resetting") IsResettingSession = true;
-        TryAdvance();
+        // Advance only from Update, after NetSync has finished applying its snapshot.
     }
     private void ClearLocal()
     {
@@ -169,6 +172,22 @@ public class ExperimentSessionManager : MonoBehaviour
         Subscribe();
         if (network == null || !network.IsReady) { wasReady = false; return; }
         if (!wasReady) OnReady();
+        // Resetting cards may publish variables through other components. Never do
+        // that inside NetSync's change callback while it is enumerating its cache.
+        while (pendingControls.Count > 0)
+        {
+            string value = pendingControls.Dequeue();
+            observedControl = value;
+            ReadControl(value);
+        }
+        // Recover even when another listener interrupted notification dispatch,
+        // or the component was temporarily disabled when the change arrived.
+        string latestControl = network.GetGlobalVariable(ControlVariable);
+        if (latestControl != observedControl)
+        {
+            observedControl = latestControl;
+            ReadControl(latestControl);
+        }
         if (controlRepairQueued && pendingSessionRequestId == null && network.SetGlobalVariable(ControlVariable, JsonUtility.ToJson(control))) controlRepairQueued = false;
         if (control != null && control.phase == "active" && localDefaultsQueued && !localResetFailed &&
             network.GetClientVariable(AckVariable) != CurrentSessionId && Time.unscaledTime >= nextAckRepair)
