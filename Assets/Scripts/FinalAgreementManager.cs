@@ -253,8 +253,11 @@ public class FinalAgreementManager : MonoBehaviour
             // Clear this client's approval immediately, before LateUpdate can finalize an obsolete board.
             if (IsNormalPhase && !IsBoardConfirmed && oldValue != newValue)
             {
+                bool hadLocalApproval = !string.IsNullOrEmpty(pendingReady) ||
+                    (IsLocalParticipant && !string.IsNullOrEmpty(network.GetClientVariable(ReadyVariable)));
                 pendingReady = null;
                 if (IsLocalParticipant && !string.IsNullOrEmpty(network.GetClientVariable(ReadyVariable))) network.SetClientVariable(ReadyVariable, "");
+                if (hadLocalApproval) Debug.Log($"[Final Agreement Reset] Placement changed / {name} / {oldValue} -> {newValue}", this);
                 publishRequested = false; Changed();
             }
         }
