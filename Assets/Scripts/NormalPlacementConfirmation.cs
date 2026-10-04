@@ -2,121 +2,66 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-// One atomic Room value per card: A/B/C/D = confirmed Tier; Unconfirmed = reset.
+// Compatibility getters retained for log collection. Confirmation now belongs to FinalAgreementManager.
 public partial class NormalPlacementSync
 {
-    private const string ConfirmationPrefix = "normalConfirmation_";
-    private const string UnconfirmedValue = "Unconfirmed";
     [SerializeField] private ExperimentParticipantRegistry participantRegistry;
+    [SerializeField] private FinalAgreementManager finalAgreement;
     private readonly Dictionary<string, string> finalTiers = new Dictionary<string, string>();
     public event Action<string, string> OnCardConfirmed;
     public event Action<string> OnCardConfirmationReset;
+    public IReadOnlyCollection<string> CardIds => cardsById.Keys;
+    public CardTierDetector GetCard(string cardId) => cardId != null && cardsById.TryGetValue(cardId, out var card) ? card : null;
     public bool IsCardConfirmed(string cardId) => cardId != null && finalTiers.ContainsKey(cardId);
     public string GetFinalTier(string cardId) => cardId != null && finalTiers.TryGetValue(cardId, out var tier) ? tier : null;
-    private static bool IsFinalTier(string tier) => tier == "A" || tier == "B" || tier == "C" || tier == "D";
+    public bool IsLocalInteractionLocked => IsNormalMode && finalAgreement != null && finalAgreement.IsLocalInteractionLocked;
 
+    [Obsolete("Use Participant agreement via FinalAgreementManager.ToggleLocalReady().")]
     public bool ConfirmCurrentCard() => ConfirmCard(experimentManager != null ? experimentManager.CurrentCardId : null);
-
+    [Obsolete("Experimenter card confirmation is replaced by Participant board agreement.")]
     public bool ConfirmCard(string cardId)
     {
-        Debug.Log($"[Normal Confirm Request] {cardId}");
-        Subscribe();
-        if (!isActiveAndEnabled || !IsNormalMode || participantRegistry == null || !participantRegistry.IsLocalExperimenter ||
-            subscribedManager == null || !subscribedManager.IsReady)
-            return ConfirmFailed(cardId, "requires Normal, a ready connection and Experimenter role");
-        if (cardId == null || !cardsById.TryGetValue(cardId, out var card) || card == null)
-            return ConfirmFailed(cardId, "card not found");
-        if (IsCardConfirmed(cardId)) return ConfirmFailed(cardId, "already confirmed");
-        string tier = subscribedManager.GetGlobalVariable(VariablePrefix + cardId);
-        // Never confirm an unsent/local-only or still-held placement.
-        if (!IsFinalTier(tier) || tier != card.CurrentTier || !card.CanConfirmNormalPlacement)
-            return ConfirmFailed(cardId, $"is {card.CurrentTier}, held, or waiting for Room placement synchronization");
-        if (!subscribedManager.SetGlobalVariable(ConfirmationPrefix + cardId, tier))
-            return ConfirmFailed(cardId, "Room write failed");
-        Debug.Log($"[Normal Confirm] {cardId} -> Tier {tier}");
-        return true;
-    }
-
-    private bool ConfirmFailed(string cardId, string reason)
-    {
-        Debug.LogWarning($"[Normal Confirm Failed] {cardId} {reason}", this);
+        Debug.LogWarning("[Normal Confirm Failed] Use Participant Final Agreement; Experimenter confirmation is disabled", this);
         return false;
     }
+    [Obsolete("Reset the complete Board agreement, not an individual final result.")]
+    public bool ResetConfirmation(string cardId) => finalAgreement != null && finalAgreement.ResetBoardAgreement();
 
-    // Explicit, role-guarded Room reset entry point for a future reset UI.
-    public bool ResetConfirmation(string cardId)
+    public void SetBoardConfirmation(IReadOnlyDictionary<string, string> placements, bool confirmed)
     {
-        Subscribe();
-        if (!isActiveAndEnabled || !IsNormalMode || participantRegistry == null || !participantRegistry.IsLocalExperimenter ||
-            subscribedManager == null || !subscribedManager.IsReady || cardId == null || !cardsById.ContainsKey(cardId)) return false;
-        // Replace any stale placement first. The card stays locked until reset arrives.
-        string tier = GetFinalTier(cardId);
-        if (tier != null && !subscribedManager.SetGlobalVariable(VariablePrefix + cardId, tier)) return false;
-        return subscribedManager.SetGlobalVariable(ConfirmationPrefix + cardId, UnconfirmedValue);
-    }
-
-    private void ReadConfirmations()
-    {
+        var previous = new Dictionary<string, string>(finalTiers);
         finalTiers.Clear();
-        foreach (var entry in cardsById)
-        {
-            string value = subscribedManager.GetGlobalVariable(ConfirmationPrefix + entry.Key);
-            if (value != null) ReceiveConfirmation(ConfirmationPrefix + entry.Key, value);
-        }
+        if (confirmed) foreach (var pair in placements) if (cardsById.ContainsKey(pair.Key) && zonesByTier.ContainsKey(pair.Value)) finalTiers.Add(pair.Key, pair.Value);
+        pendingPlacements.Clear(); RefreshConfirmationLocks();
+        foreach (var pair in finalTiers) if (!previous.TryGetValue(pair.Key, out var tier) || tier != pair.Value) OnCardConfirmed?.Invoke(pair.Key, pair.Value);
+        foreach (var pair in previous) if (!finalTiers.ContainsKey(pair.Key)) OnCardConfirmationReset?.Invoke(pair.Key);
     }
-
-    private bool ReceiveConfirmation(string name, string value)
-    {
-        if (string.IsNullOrEmpty(name) || !name.StartsWith(ConfirmationPrefix, StringComparison.Ordinal)) return false;
-        string cardId = name.Substring(ConfirmationPrefix.Length);
-        if (!cardsById.ContainsKey(cardId)) return true;
-        if (value == UnconfirmedValue)
-        {
-            if (finalTiers.Remove(cardId))
-            {
-                if (cardsById[cardId] != null) cardsById[cardId].SetNormalConfirmationLock(false, null);
-                if (IsNormalMode && experimentManager.CurrentCardId == cardId)
-                    experimentManager.SetState(ExperimentManager.ExperimentState.Idle);
-                OnCardConfirmationReset?.Invoke(cardId);
-            }
-            return true;
-        }
-        if (!IsFinalTier(value) || !zonesByTier.ContainsKey(value))
-        {
-            Debug.LogWarning($"[Normal Confirm Failed] Invalid Room confirmation: {cardId} / {value}", this);
-            return true;
-        }
-        bool changed = GetFinalTier(cardId) != value;
-        finalTiers[cardId] = value;
-        pendingPlacements.Remove(cardId);
-        RefreshConfirmationLocks();
-        if (changed)
-        {
-            Debug.Log($"[Normal Confirm Receive] {cardId} -> Tier {value}");
-            OnCardConfirmed?.Invoke(cardId, value);
-        }
-        return true;
-    }
-
     private void RefreshConfirmationLocks()
     {
         foreach (var entry in cardsById)
         {
             if (entry.Value == null) continue;
-            bool locked = IsNormalMode && finalTiers.TryGetValue(entry.Key, out var tier);
+            bool locked = IsNormalMode && IsCardConfirmed(entry.Key);
             entry.Value.SetNormalConfirmationLock(locked, locked ? zonesByTier[GetFinalTier(entry.Key)] : null);
         }
-        if (IsNormalMode && IsCardConfirmed(experimentManager.CurrentCardId) &&
-            experimentManager.CurrentState != ExperimentManager.ExperimentState.Confirmed)
+        if (IsNormalMode && finalTiers.Count > 0 && experimentManager.CurrentState != ExperimentManager.ExperimentState.Confirmed)
             experimentManager.SetState(ExperimentManager.ExperimentState.Confirmed);
     }
-
     public bool RejectConfirmedPlacement(string cardId)
     {
         if (!IsNormalMode || !IsCardConfirmed(cardId)) return false;
         Debug.LogWarning($"[Normal Placement Rejected] {cardId} is confirmed at Tier {GetFinalTier(cardId)}", this);
-        if (cardsById.TryGetValue(cardId, out var card) && card != null)
-            card.SetNormalConfirmationLock(true, zonesByTier[GetFinalTier(cardId)]);
+        if (GetCard(cardId) != null) GetCard(cardId).SetNormalConfirmationLock(true, zonesByTier[GetFinalTier(cardId)]);
+        return true;
+    }
+    public bool RejectLocalInteraction(string cardId)
+    {
+        if (RejectConfirmedPlacement(cardId)) return true;
+        if (!IsLocalInteractionLocked) return false;
+        Debug.LogWarning("[Card Interaction Rejected] Local participant is already ready", this);
+        // Remote updates still use ApplySyncedPlacement and are allowed while locally Ready.
+        string tier = subscribedManager != null && subscribedManager.IsReady ? subscribedManager.GetGlobalVariable(VariablePrefix + cardId) : null;
+        if (tier != null && zonesByTier.TryGetValue(tier, out var zone) && GetCard(cardId) != null) GetCard(cardId).ApplySyncedPlacement(zone);
         return true;
     }
 }

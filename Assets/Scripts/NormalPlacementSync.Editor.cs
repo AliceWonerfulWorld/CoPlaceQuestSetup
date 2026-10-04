@@ -13,8 +13,6 @@ public partial class NormalPlacementSync
         var keyboard = Keyboard.current;
         if (keyboard == null) return;
 
-        if (keyboard.f9Key.wasPressedThisFrame) ConfirmCurrentCard();
-
         string selected = null;
         if (keyboard.f6Key.wasPressedThisFrame) selected = "Card_01";
         else if (keyboard.f7Key.wasPressedThisFrame) selected = "Card_02";
@@ -44,6 +42,7 @@ public partial class NormalPlacementSync
             Debug.LogWarning($"[Normal Editor Test] Missing card or Tier: {cardId} / {tierId}", this);
             return false;
         }
+        if (RejectLocalInteraction(cardId)) return false;
         // ApplySyncedPlacement never sends. A held card or full Tier rejects the input.
         if (!card.ApplySyncedPlacement(zone))
         {

@@ -117,7 +117,6 @@ public partial class NormalPlacementSync : MonoBehaviour
     {
         // GetGlobalVariable may only be called after NetSync's initial sync is ready.
         // Do not publish defaults: a joining client must not overwrite the Room's cards.
-        ReadConfirmations();
         foreach (var entry in cardsById)
         {
             string value = subscribedManager.GetGlobalVariable(VariablePrefix + entry.Key);
@@ -128,7 +127,7 @@ public partial class NormalPlacementSync : MonoBehaviour
     public bool SendPlacement(string cardId, string tierId)
     {
         if (!isActiveAndEnabled || !IsNormalMode) return false;
-        if (RejectConfirmedPlacement(cardId)) return false;
+        if (RejectLocalInteraction(cardId)) return false;
         if (string.IsNullOrEmpty(cardId) || !cardsById.ContainsKey(cardId)
             || string.IsNullOrEmpty(tierId) || !zonesByTier.ContainsKey(tierId))
         {
@@ -143,6 +142,7 @@ public partial class NormalPlacementSync : MonoBehaviour
             return false;
         }
 
+        if (finalAgreement != null && !finalAgreement.PreparePlacementChange(cardId, tierId)) return false;
         if (!subscribedManager.SetGlobalVariable(VariablePrefix + cardId, tierId))
         {
             Debug.LogWarning($"[Normal Placement] Placement send failed: {cardId} / {tierId}", this);
@@ -157,7 +157,6 @@ public partial class NormalPlacementSync : MonoBehaviour
 
     private void OnGlobalVariableChanged(string name, string oldValue, string newValue)
     {
-        if (ReceiveConfirmation(name, newValue)) return;
         if (!IsNormalMode || string.IsNullOrEmpty(name)
             || !name.StartsWith(VariablePrefix, StringComparison.Ordinal)) return;
 

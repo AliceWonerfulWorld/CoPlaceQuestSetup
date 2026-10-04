@@ -2,8 +2,14 @@ using UnityEngine;
 using UnityEngine.XR.Interaction.Toolkit;
 using UnityEngine.XR.Interaction.Toolkit.Interactables;
 
-public class CardTierDetector : MonoBehaviour
+public class CardTierDetector : MonoBehaviour, UnityEngine.XR.Interaction.Toolkit.Filtering.IXRSelectFilter
 {
+    public bool canProcess => isActiveAndEnabled;
+    public bool Process(UnityEngine.XR.Interaction.Toolkit.Interactors.IXRSelectInteractor interactor,
+        UnityEngine.XR.Interaction.Toolkit.Interactables.IXRSelectInteractable interactable)
+        => normalPlacementSync == null || !normalPlacementSync.IsNormalMode ||
+            (!normalPlacementSync.IsLocalInteractionLocked && !normalPlacementSync.IsCardConfirmed(gameObject.name));
+
     public string CurrentTier { get; private set; } = "Unclassified";
 
     // 候補同期用
@@ -74,6 +80,7 @@ public class CardTierDetector : MonoBehaviour
         rb = GetComponent<Rigidbody>();
         grabInteractable = GetComponent<XRGrabInteractable>();
 
+        grabInteractable.selectFilters.Add(this);
         grabInteractable.selectEntered.AddListener(OnGrabbed);
         grabInteractable.selectExited.AddListener(OnReleased);
     }
@@ -83,6 +90,7 @@ public class CardTierDetector : MonoBehaviour
         if (hoveredZone != null) hoveredZone.SetHovered(gameObject, false);
         if (currentZone != null) currentZone.ReleaseCard(gameObject);
         if (grabInteractable == null) return;
+        grabInteractable.selectFilters.Remove(this);
         grabInteractable.selectEntered.RemoveListener(OnGrabbed);
         grabInteractable.selectExited.RemoveListener(OnReleased);
     }
@@ -90,7 +98,7 @@ public class CardTierDetector : MonoBehaviour
 
     private void OnGrabbed(SelectEnterEventArgs args)
     {
-        if (normalPlacementSync != null && normalPlacementSync.RejectConfirmedPlacement(gameObject.name)) return;
+        if (normalPlacementSync != null && normalPlacementSync.RejectLocalInteraction(gameObject.name)) return;
         grabStartPosition = transform.position;
         grabStartRotation = transform.rotation;
         // 再び掴んだ時は動かせるようにする。
@@ -162,7 +170,7 @@ public class CardTierDetector : MonoBehaviour
 
     private void OnReleased(SelectExitEventArgs args)
     {
-        if (normalPlacementSync != null && normalPlacementSync.RejectConfirmedPlacement(gameObject.name)) return;
+        if (normalPlacementSync != null && normalPlacementSync.RejectLocalInteraction(gameObject.name)) return;
         if (hoveredZone != null) hoveredZone.SetHovered(gameObject, false);
         hoveredZone = null;
         if (candidateSync != null && experimentManager != null &&
