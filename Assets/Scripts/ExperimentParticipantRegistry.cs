@@ -22,6 +22,7 @@ public class ExperimentParticipantRegistry : MonoBehaviour
     public int ExpectedParticipantCount => Mathf.Max(1, expectedParticipantCount);
     public NetSyncManager Network => netSyncManager != null ? netSyncManager : NetSyncManager.Instance;
     public bool IsLocalParticipant => EffectiveRole == ClientRole.Participant;
+    public bool IsLocalExperimenter => EffectiveRole == ClientRole.Experimenter;
     private ClientRole EffectiveRole => localRole == ClientRole.AutoByPlatform
         ? (Application.isEditor ? ClientRole.Experimenter : ClientRole.Participant) : localRole;
 

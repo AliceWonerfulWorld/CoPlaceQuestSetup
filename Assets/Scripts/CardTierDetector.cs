@@ -28,6 +28,44 @@ public class CardTierDetector : MonoBehaviour
     private Vector3 grabStartPosition;
     private Quaternion grabStartRotation;
 
+    private bool normalConfirmationLocked;
+    private bool grabWasEnabled;
+    public bool CanConfirmNormalPlacement => grabInteractable != null && !grabInteractable.isSelected;
+
+    public void SetNormalConfirmationLock(bool locked, TierZone finalZone)
+    {
+        if (grabInteractable == null || rb == null) return;
+        if (locked != normalConfirmationLocked)
+        {
+            normalConfirmationLocked = locked;
+            if (locked)
+            {
+                grabWasEnabled = grabInteractable.enabled;
+                grabInteractable.enabled = false;
+                Debug.Log($"[Normal Card Locked] {gameObject.name}");
+            }
+            else grabInteractable.enabled = grabWasEnabled;
+        }
+        if (!locked || finalZone == null) return;
+        Transform point = finalZone.GetAvailableSnapPoint(gameObject);
+        if (point == null) return;
+        if (currentZone == finalZone && CurrentTier == finalZone.tierName && rb.isKinematic &&
+            !grabInteractable.isSelected && (transform.position - point.position).sqrMagnitude < 0.000001f &&
+            Quaternion.Angle(transform.rotation, point.rotation) < 0.01f) return;
+        if (currentZone != null && currentZone != finalZone) currentZone.ReleaseCard(gameObject);
+        if (hoveredZone != null) hoveredZone.SetHovered(gameObject, false);
+        hoveredZone = null;
+        rb.isKinematic = false;
+        rb.linearVelocity = Vector3.zero;
+        rb.angularVelocity = Vector3.zero;
+        rb.position = point.position;
+        rb.rotation = point.rotation;
+        transform.SetPositionAndRotation(point.position, point.rotation);
+        rb.isKinematic = true;
+        currentZone = candidateZone = finalZone;
+        CurrentTier = finalZone.tierName;
+    }
+
     private Rigidbody rb;
     private XRGrabInteractable grabInteractable;
 
@@ -52,6 +90,7 @@ public class CardTierDetector : MonoBehaviour
 
     private void OnGrabbed(SelectEnterEventArgs args)
     {
+        if (normalPlacementSync != null && normalPlacementSync.RejectConfirmedPlacement(gameObject.name)) return;
         grabStartPosition = transform.position;
         grabStartRotation = transform.rotation;
         // 再び掴んだ時は動かせるようにする。
@@ -123,6 +162,7 @@ public class CardTierDetector : MonoBehaviour
 
     private void OnReleased(SelectExitEventArgs args)
     {
+        if (normalPlacementSync != null && normalPlacementSync.RejectConfirmedPlacement(gameObject.name)) return;
         if (hoveredZone != null) hoveredZone.SetHovered(gameObject, false);
         hoveredZone = null;
         if (candidateSync != null && experimentManager != null &&
@@ -217,6 +257,7 @@ public class CardTierDetector : MonoBehaviour
             || zone == null || grabInteractable.isSelected)
             return false;
 
+        if (normalPlacementSync.RejectConfirmedPlacement(gameObject.name)) return false;
         Transform snapPoint = zone.GetAvailableSnapPoint(gameObject);
         if (snapPoint == null) return false;
 

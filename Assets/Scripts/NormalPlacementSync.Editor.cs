@@ -13,6 +13,8 @@ public partial class NormalPlacementSync
         var keyboard = Keyboard.current;
         if (keyboard == null) return;
 
+        if (keyboard.f9Key.wasPressedThisFrame) ConfirmCurrentCard();
+
         string selected = null;
         if (keyboard.f6Key.wasPressedThisFrame) selected = "Card_01";
         else if (keyboard.f7Key.wasPressedThisFrame) selected = "Card_02";

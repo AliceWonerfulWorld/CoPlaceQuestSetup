@@ -82,6 +82,7 @@ public partial class NormalPlacementSync : MonoBehaviour
     {
         // Also handles late NetSync initialization without searching the scene each frame.
         Subscribe();
+        RefreshConfirmationLocks();
         bool normalAndReady = IsNormalMode && subscribedManager != null && subscribedManager.IsReady;
         if (!normalAndReady)
         {
@@ -116,6 +117,7 @@ public partial class NormalPlacementSync : MonoBehaviour
     {
         // GetGlobalVariable may only be called after NetSync's initial sync is ready.
         // Do not publish defaults: a joining client must not overwrite the Room's cards.
+        ReadConfirmations();
         foreach (var entry in cardsById)
         {
             string value = subscribedManager.GetGlobalVariable(VariablePrefix + entry.Key);
@@ -126,6 +128,7 @@ public partial class NormalPlacementSync : MonoBehaviour
     public bool SendPlacement(string cardId, string tierId)
     {
         if (!isActiveAndEnabled || !IsNormalMode) return false;
+        if (RejectConfirmedPlacement(cardId)) return false;
         if (string.IsNullOrEmpty(cardId) || !cardsById.ContainsKey(cardId)
             || string.IsNullOrEmpty(tierId) || !zonesByTier.ContainsKey(tierId))
         {
@@ -154,11 +157,13 @@ public partial class NormalPlacementSync : MonoBehaviour
 
     private void OnGlobalVariableChanged(string name, string oldValue, string newValue)
     {
+        if (ReceiveConfirmation(name, newValue)) return;
         if (!IsNormalMode || string.IsNullOrEmpty(name)
             || !name.StartsWith(VariablePrefix, StringComparison.Ordinal)) return;
 
         string cardId = name.Substring(VariablePrefix.Length);
         if (!cardsById.TryGetValue(cardId, out var card) || card == null) return;
+        if (RejectConfirmedPlacement(cardId)) return;
         if (string.IsNullOrEmpty(newValue) || !zonesByTier.TryGetValue(newValue, out var zone))
         {
             Debug.LogWarning($"[Normal Placement] Invalid shared Tier: {cardId} / {newValue}", this);
