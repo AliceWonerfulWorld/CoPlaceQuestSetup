@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using Styly.NetSync;
 using UnityEngine;
 
-public class NormalPlacementSync : MonoBehaviour
+public partial class NormalPlacementSync : MonoBehaviour
 {
     private const string VariablePrefix = "normalPlacement_";
 
@@ -92,6 +92,9 @@ public class NormalPlacementSync : MonoBehaviour
 
         if (!wasNormalAndReady) ReadSharedPlacements();
         wasNormalAndReady = true;
+#if UNITY_EDITOR
+        HandleEditorTestInput();
+#endif
 
         if (pendingPlacements.Count == 0) return;
         foreach (var entry in cardsById)
