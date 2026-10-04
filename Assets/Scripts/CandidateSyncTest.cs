@@ -13,7 +13,8 @@ public class CandidateSyncTest : MonoBehaviour
     [SerializeField] private ExperimentParticipantRegistry participantRegistry;
     [SerializeField] private NetSyncManager netSyncManager;
     [SerializeField] private ExperimentSessionManager sessionManager;
-    [SerializeField, Tooltip("Stage 1: keep answers editable/private; legacy Reveal runs only after an explicit state transition.")]
+    [SerializeField] private ProposedRevealCoordinator revealCoordinator;
+    [SerializeField, Tooltip("Use local Private answers and the all-card Reveal flow; never legacy per-card markers.")]
     private bool usePrivateAnswerBoard = true;
     [SerializeField] private string[] answerCardIds = { "Card_01", "Card_02", "Card_03" };
     public IReadOnlyList<string> AnswerCardIds => answerCardIds;
@@ -66,10 +67,15 @@ public class CandidateSyncTest : MonoBehaviour
     private NetSyncManager subscribedManager;
     private bool started, networkWasReady;
     private string previousCurrentCard;
+    private readonly Dictionary<string, ParticipantAnswer> localSubmissions = new Dictionary<string, ParticipantAnswer>();
+    public bool MatchesLocalSubmission(string cardId, ParticipantAnswer answer) =>
+        !localSubmissions.TryGetValue(cardId, out var local) ||
+        (local.Tier == answer.Tier && local.Answered == answer.Answered && local.SelectedAt == answer.SelectedAt);
     private class RevealedCandidate { public int clientNo, displayId; public string tier, selectedAt; }
     private bool IsProposed => (sessionManager == null || !sessionManager.IsResettingSession) && experimentManager != null && experimentManager.CurrentMode == ExperimentManager.ExperimentMode.Proposed;
     private NetSyncManager Network => netSyncManager != null ? netSyncManager : NetSyncManager.Instance;
-    public bool IsCardRevealed(string cardId) => IsProposed && revealedCards.ContainsKey(cardId);
+    public bool IsCardRevealed(string cardId) => IsProposed &&
+        (revealedCards.ContainsKey(cardId) || (revealCoordinator != null && revealCoordinator.HasRevealed));
     private static bool IsValidTier(string tier) => tier == "A" || tier == "B" || tier == "C" || tier == "D";
     private static string Key(int client, string card) => $"{client}_{card}";
 
@@ -103,6 +109,7 @@ public class CandidateSyncTest : MonoBehaviour
     {
         if ((sessionManager != null && sessionManager.IsResettingSession) || subscribedManager == null || !subscribedManager.IsReady) return;
         networkWasReady = true;
+        localSubmissions.Clear();
         participantCandidates.Clear(); participantAnswered.Clear(); participantSelectedTimes.Clear();
         revealedCards.Clear(); checkLogs.Clear(); visibilityLogs.Clear(); rejectedChanges.Clear();
         if (candidateMarkerManager != null) candidateMarkerManager.ClearAllMarkers();
@@ -117,8 +124,7 @@ public class CandidateSyncTest : MonoBehaviour
         Subscribe();
         // Fail closed even while disconnected or waiting for Session Reset.
         if (usePrivateAnswerBoard && experimentManager != null &&
-            experimentManager.CurrentMode == ExperimentManager.ExperimentMode.Proposed &&
-            IsIndependentState(experimentManager.CurrentState)) HideLegacyAnswerViews();
+            experimentManager.CurrentMode == ExperimentManager.ExperimentMode.Proposed) HideLegacyAnswerViews();
         if (subscribedManager == null || !subscribedManager.IsReady) networkWasReady = false;
         else if (!networkWasReady) OnReady();
     }
@@ -126,6 +132,7 @@ public class CandidateSyncTest : MonoBehaviour
     {
         if (!IsIndependentAnswerPhase || !isActiveAndEnabled || string.IsNullOrEmpty(cardId) ||
             Array.IndexOf(answerCardIds, cardId) < 0) return false;
+        if (revealCoordinator != null && revealCoordinator.IsAnswerLocked) return false;
         Subscribe();
         if (Network == null || !Network.IsReady || participantRegistry == null || !participantRegistry.IsLocalParticipant)
         {
@@ -159,6 +166,7 @@ public class CandidateSyncTest : MonoBehaviour
         bool answered = candidate && time && SessionVariableTransport.SetClientVariable(Network, sessionManager, $"answered_{cardId}", "true");
         if (!answered) { Debug.LogWarning($"[Candidate] Send failed: {cardId}", this); return false; }
         submitted = new ParticipantAnswer(cardId, tierId, true, selectedAt);
+        localSubmissions[cardId] = submitted;
         if (experimentManager.CurrentState == ExperimentManager.ExperimentState.Idle)
             experimentManager.SetState(ExperimentManager.ExperimentState.Answering);
         Debug.Log($"[Candidate Send] Client {Network.ClientNo} / {cardId} / Tier {tierId} / Answered true / SelectedAt {selectedAt}");
@@ -175,6 +183,7 @@ public class CandidateSyncTest : MonoBehaviour
         bool time = SessionVariableTransport.SetClientVariable(Network, sessionManager, $"selectedAt_{cardId}", "");
         if (!answered || !candidate || !time) { Debug.LogWarning($"[Candidate] Cancel send failed: {cardId}", this); return false; }
         submitted = new ParticipantAnswer(cardId, "Unclassified", false, "");
+        localSubmissions[cardId] = submitted;
         Debug.Log($"[Candidate Cancel] Client {Network.ClientNo} / {cardId} / Answered false");
         return true;
     }
@@ -231,13 +240,12 @@ public class CandidateSyncTest : MonoBehaviour
     {
         if (!IsProposed || subscribedManager == null || !subscribedManager.IsReady || participantRegistry == null) return;
         participantRegistry.RefreshParticipants();
-        if (usePrivateAnswerBoard && IsIndependentAnswerPhase)
+        if (usePrivateAnswerBoard)
         {
-            // Stage 1 has no automatic reveal. Never expose remote answers via
-            // legacy markers/status, even when a single card has all its answers.
+            // ProposedRevealCoordinator is the sole all-card Reveal authority.
             if (candidateMarkerManager != null) candidateMarkerManager.ClearAllMarkers();
             if (candidateStatusText != null) candidateStatusText.text = "";
-            UpdatePrivateAnswerState();
+            if (IsIndependentAnswerPhase) UpdatePrivateAnswerState();
             return;
         }
         if (previousCurrentCard != experimentManager.CurrentCardId)
@@ -368,6 +376,7 @@ public class CandidateSyncTest : MonoBehaviour
         participantCandidates.Clear(); participantAnswered.Clear(); participantSelectedTimes.Clear();
         revealedCards.Clear(); dirtyCards.Clear(); checkLogs.Clear(); visibilityLogs.Clear(); rejectedChanges.Clear();
         previousCurrentCard = null; networkWasReady = false;
+        localSubmissions.Clear();
         if (candidateMarkerManager != null) candidateMarkerManager.ClearAllMarkers();
         if (candidateStatusText != null) candidateStatusText.text = "";
     }

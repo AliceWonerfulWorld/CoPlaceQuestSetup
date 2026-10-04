@@ -13,6 +13,7 @@ public class PrivateTierBoardController : MonoBehaviour
     [SerializeField] private ExperimentParticipantRegistry participantRegistry;
     [SerializeField] private ExperimentSessionManager sessionManager;
     [SerializeField] private CandidateSyncTest candidateSync;
+    [SerializeField] private ProposedRevealCoordinator revealCoordinator;
     [SerializeField] private GameObject contentRoot;
     [SerializeField] private PrivateAnswerCard[] cards;
     [SerializeField] private TierZone[] tierZones;
@@ -30,10 +31,12 @@ public class PrivateTierBoardController : MonoBehaviour
     private string selectedCardId = "Card_01";
 #endif
     public bool IsVisible => experimentManager != null && participantRegistry != null && participantRegistry.IsLocalParticipant &&
-        experimentManager.CurrentMode == ExperimentManager.ExperimentMode.Proposed && !IsResetting;
+        experimentManager.CurrentMode == ExperimentManager.ExperimentMode.Proposed && !IsResetting &&
+        (revealCoordinator == null || !revealCoordinator.HasRevealed);
     private bool IsResetting => sessionManager != null && sessionManager.IsResettingSession;
     public bool CanInteract => isActiveAndEnabled && IsVisible && candidateSync != null && candidateSync.IsDataReady &&
-        candidateSync.IsIndependentAnswerPhase && participantRegistry.IsRegisteredParticipant(candidateSync.LocalClientNo);
+        candidateSync.IsIndependentAnswerPhase && participantRegistry.IsRegisteredParticipant(candidateSync.LocalClientNo) &&
+        (revealCoordinator == null || !revealCoordinator.IsAnswerLocked);
 
     private void Awake()
     {
@@ -98,7 +101,8 @@ public class PrivateTierBoardController : MonoBehaviour
         SetMainHidden(experimentManager != null && experimentManager.CurrentMode == ExperimentManager.ExperimentMode.Proposed);
         if (instructions != null)
         {
-            string text = CanInteract ? "Only your answers are visible. Grab any card and place it in A-D.\nReturn to Unclassified to cancel."
+            string text = revealCoordinator != null && revealCoordinator.IsAnswerLocked && !revealCoordinator.HasRevealed ? "All answers complete. Preparing simultaneous reveal..." :
+                CanInteract ? "Only your answers are visible. Grab any card and place it in A-D.\nReturn to Unclassified to cancel."
                 : candidateSync != null && candidateSync.IsIndependentAnswerPhase ? "Waiting for connection / Participant registration" : "YOUR ANSWER - READ ONLY";
 #if UNITY_EDITOR
             if (CanInteract) text += "\nF6 / F7 / F8 (Q / W / E): select 01 / 02 / 03   |   1-4: A-D   |   0: cancel   |   Selected: " + selectedCardId;

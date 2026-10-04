@@ -96,8 +96,8 @@ public class ExperimentSessionManager : MonoBehaviour
         if (client == network.ClientNo && clientCache.TryGetValue(key, out var restored))
             clientRepairs[name] = restored;
     }
-    private static bool IsExperimentGlobal(string name) => name != null && (name.StartsWith("normalPlacement_", StringComparison.Ordinal) || name.StartsWith("normalPlacementVersion_", StringComparison.Ordinal) || name == FinalAgreementManager.BoardVariable);
-    private static bool IsExperimentClient(string name) => name != null && (name.StartsWith("candidate_", StringComparison.Ordinal) || name.StartsWith("answered_", StringComparison.Ordinal) || name.StartsWith("selectedAt_", StringComparison.Ordinal) || name == FinalAgreementManager.ReadyVariable || name == FinalAgreementManager.HeldVariable || name == "experimentState");
+    private static bool IsExperimentGlobal(string name) => name != null && (name.StartsWith("normalPlacement_", StringComparison.Ordinal) || name.StartsWith("normalPlacementVersion_", StringComparison.Ordinal) || name == FinalAgreementManager.BoardVariable || name == ProposedRevealCoordinator.PrepareVariable || name == ProposedRevealCoordinator.RevealVariable);
+    private static bool IsExperimentClient(string name) => name != null && (name.StartsWith("candidate_", StringComparison.Ordinal) || name.StartsWith("answered_", StringComparison.Ordinal) || name.StartsWith("selectedAt_", StringComparison.Ordinal) || name == FinalAgreementManager.ReadyVariable || name == FinalAgreementManager.HeldVariable || name == "experimentState" || name == ProposedRevealCoordinator.AckVariable);
     private void ReadControl(string value)
     {
         if (string.IsNullOrEmpty(value)) return;
@@ -161,6 +161,9 @@ public class ExperimentSessionManager : MonoBehaviour
             clientDefaults["selectedAt_" + card] = "";
         }
         globalDefaults[FinalAgreementManager.BoardVariable] = JsonUtility.ToJson(new BoardReset { confirmed = false, sessionId = CurrentSessionId });
+        globalDefaults[ProposedRevealCoordinator.PrepareVariable] = "";
+        globalDefaults[ProposedRevealCoordinator.RevealVariable] = "";
+        clientDefaults[ProposedRevealCoordinator.AckVariable] = "";
         clientDefaults[FinalAgreementManager.ReadyVariable] = "";
         clientDefaults[FinalAgreementManager.HeldVariable] = "none";
         clientDefaults["experimentState"] = "Idle";
