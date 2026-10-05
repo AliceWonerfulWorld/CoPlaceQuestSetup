@@ -97,7 +97,7 @@ public class ExperimentSessionManager : MonoBehaviour
             clientRepairs[name] = restored;
     }
     private static bool IsExperimentGlobal(string name) => name != null && (name.StartsWith("normalPlacement_", StringComparison.Ordinal) || name.StartsWith("normalPlacementVersion_", StringComparison.Ordinal) || name == FinalAgreementManager.BoardVariable || name == ProposedRevealCoordinator.PrepareVariable || name == ProposedRevealCoordinator.RevealVariable || name == ProposedSharedPlacementController.ReadyVariable);
-    private static bool IsExperimentClient(string name) => name != null && (name.StartsWith("candidate_", StringComparison.Ordinal) || name.StartsWith("answered_", StringComparison.Ordinal) || name.StartsWith("selectedAt_", StringComparison.Ordinal) || name == FinalAgreementManager.ReadyVariable || name == FinalAgreementManager.HeldVariable || name == "experimentState" || name == ProposedRevealCoordinator.AckVariable);
+    private static bool IsExperimentClient(string name) => name != null && (name.StartsWith("candidate_", StringComparison.Ordinal) || name.StartsWith("answered_", StringComparison.Ordinal) || name.StartsWith("selectedAt_", StringComparison.Ordinal) || name == FinalAgreementManager.ReadyVariable || name == FinalAgreementManager.HeldVariable || name == "experimentState" || name == ProposedRevealCoordinator.AckVariable || name == IndependentAnswerSubmission.SubmittedVariable || name == IndependentAnswerSubmission.ProofVariable);
     private void ReadControl(string value)
     {
         if (string.IsNullOrEmpty(value)) return;
@@ -165,6 +165,8 @@ public class ExperimentSessionManager : MonoBehaviour
         globalDefaults[ProposedRevealCoordinator.RevealVariable] = "";
         globalDefaults[ProposedSharedPlacementController.ReadyVariable] = "";
         clientDefaults[ProposedRevealCoordinator.AckVariable] = "";
+        clientDefaults[IndependentAnswerSubmission.SubmittedVariable] = "false";
+        clientDefaults[IndependentAnswerSubmission.ProofVariable] = "";
         clientDefaults[FinalAgreementManager.ReadyVariable] = "";
         clientDefaults[FinalAgreementManager.HeldVariable] = "none";
         clientDefaults["experimentState"] = "Idle";

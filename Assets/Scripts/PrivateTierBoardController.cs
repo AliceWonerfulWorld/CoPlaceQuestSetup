@@ -15,6 +15,8 @@ public class PrivateTierBoardController : MonoBehaviour
     [SerializeField] private CandidateSyncTest candidateSync;
     [SerializeField] private ProposedRevealCoordinator revealCoordinator;
     [SerializeField] private ProposedSharedPlacementController sharedPlacement;
+    [SerializeField] private IndependentAnswerSubmission independentSubmission;
+    public bool HasHeldCard { get { foreach (var card in cards) if (card != null && card.IsHeld) return true; return false; } }
     [SerializeField] private GameObject contentRoot;
     [SerializeField] private PrivateAnswerCard[] cards;
     [SerializeField] private TierZone[] tierZones;
@@ -37,7 +39,8 @@ public class PrivateTierBoardController : MonoBehaviour
     private bool IsResetting => sessionManager != null && sessionManager.IsResettingSession;
     public bool CanInteract => isActiveAndEnabled && IsVisible && candidateSync != null && candidateSync.IsDataReady &&
         candidateSync.IsIndependentAnswerPhase && participantRegistry.IsRegisteredParticipant(candidateSync.LocalClientNo) &&
-        (revealCoordinator == null || !revealCoordinator.IsAnswerLocked);
+        (revealCoordinator == null || !revealCoordinator.IsAnswerLocked) &&
+        (independentSubmission == null || !independentSubmission.IsLocalLocked);
 
     private void Awake()
     {
@@ -103,7 +106,7 @@ public class PrivateTierBoardController : MonoBehaviour
             (sharedPlacement == null || !sharedPlacement.IsActive));
         if (instructions != null)
         {
-            string text = revealCoordinator != null && revealCoordinator.IsAnswerLocked && !revealCoordinator.HasRevealed ? "All answers complete. Preparing simultaneous reveal..." :
+            string text = independentSubmission != null && independentSubmission.IsLocalLocked ? "Answers submitted. Waiting for other Participants..." : revealCoordinator != null && revealCoordinator.IsAnswerLocked && !revealCoordinator.HasRevealed ? "All answers complete. Preparing simultaneous reveal..." :
                 CanInteract ? "Only your answers are visible. Grab any card and place it in A-D.\nReturn to Unclassified to cancel."
                 : candidateSync != null && candidateSync.IsIndependentAnswerPhase ? "Waiting for connection / Participant registration" : "YOUR ANSWER - READ ONLY";
 #if UNITY_EDITOR

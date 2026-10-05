@@ -14,6 +14,7 @@ public class CandidateSyncTest : MonoBehaviour
     [SerializeField] private NetSyncManager netSyncManager;
     [SerializeField] private ExperimentSessionManager sessionManager;
     [SerializeField] private ProposedRevealCoordinator revealCoordinator;
+    [SerializeField] private IndependentAnswerSubmission independentSubmission;
     [SerializeField, Tooltip("Use local Private answers and the all-card Reveal flow; never legacy per-card markers.")]
     private bool usePrivateAnswerBoard = true;
     [SerializeField] private string[] answerCardIds = { "Card_01", "Card_02", "Card_03" };
@@ -133,6 +134,7 @@ public class CandidateSyncTest : MonoBehaviour
         if (!IsIndependentAnswerPhase || !isActiveAndEnabled || string.IsNullOrEmpty(cardId) ||
             Array.IndexOf(answerCardIds, cardId) < 0) return false;
         if (revealCoordinator != null && revealCoordinator.IsAnswerLocked) return false;
+        if (independentSubmission != null && independentSubmission.IsLocalLocked) return false;
         Subscribe();
         if (Network == null || !Network.IsReady || participantRegistry == null || !participantRegistry.IsLocalParticipant)
         {

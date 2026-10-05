@@ -33,6 +33,7 @@ public static class ProposedRevealVerification
         public NormalPlacementSync placements;
         public FinalAgreementManager agreement;
         public ProposedSharedPlacementController shared;
+        public IndependentAnswerSubmission submission;
         public Component[] components;
         public void Peer(int client, string key, string value) => variables.GetType().GetMethod("SetClientVariable").Invoke(variables, new object[] { key, value, client, "reveal-test" });
         public void Global(string key, string value) => variables.GetType().GetMethod("SetGlobalVariable").Invoke(variables, new object[] { key, value, "reveal-test" });
@@ -56,7 +57,7 @@ public static class ProposedRevealVerification
                 {
                     // Manual preview ticks do not advance Unity's clock. Remove
                     // only the one-second retry throttle, preserving the barrier.
-                    foreach (var e in group) { Set(e.reveal, "nextAttempt", 0f); Call(e.answers, "LateUpdate"); Call(e.reveal, "LateUpdate"); }
+                    foreach (var e in group) { Set(e.reveal, "nextAttempt", 0f); Call(e.submission, "Update"); Call(e.answers, "LateUpdate"); Call(e.reveal, "LateUpdate"); }
                     foreach (var from in group) foreach (var to in group) if (from != to) Deliver(from, to);
                     foreach (var e in group) Call(e.privateBoard, "Update");
                 }
@@ -69,10 +70,22 @@ public static class ProposedRevealVerification
             Check(pair.All(e => !e.reveal.HasRevealed && !e.reveal.AreAllAnswersComplete() && e.view.DisplayedParticipantCount == 0), "One unanswered card prevents every endpoint from Revealing");
             Check(pair.All(e => ((TMP_Text)Get(e.answers, "candidateStatusText")).text == "" &&
                 ((IDictionary)Get(e.components.OfType<CandidateMarkerManager>().Single(), "markers")).Count == 0), "No legacy markers/status/mini boards disclose tiers before Reveal");
+            Check(p1.submission.CanSubmit && !p2.submission.CanSubmit && !p2.submission.TrySubmit(), "Only a Participant with all valid answers can Submit");
             Check(p1.privateBoard.TryPlaceCard("Card_01", "Unclassified"), "Completed local answer can cancel before Reveal");
             Check(p2.privateBoard.TryPlaceCard("Card_03", "A"), "P2 answers last card"); Tick(pair, 3);
             Check(pair.All(e => !e.reveal.HasRevealed), "Cancellation keeps the all-card barrier false");
             Check(p1.privateBoard.TryPlaceCard("Card_01", "A"), "Cancelled answer can answer again");
+            foreach (var from in pair) foreach (var to in pair) if (from != to) Deliver(from, to);
+            Tick(pair, 3);
+            Check(pair.All(e => e.reveal.AreAllAnswersComplete() && !e.reveal.HasRevealed && !e.reveal.IsAnswerLocked && e.view.DisplayedParticipantCount == 0), "All answered without Submit never starts Reveal");
+            Check(p1.submission.TrySubmit(), "P1 independently submits"); Tick(pair, 2);
+            Check(!p1.privateBoard.CanInteract && !p1.privateBoard.TryPlaceCard("Card_01", "D") && !p1.answers.TrySetCandidate("Card_01", "Unclassified", out _), "Submit locks XR/Editor and candidate cancellation data API");
+            Check(pair.All(e => !e.reveal.HasRevealed) && p2.privateBoard.CanInteract, "Only P1 Submitted never Reveals and P2 remains editable");
+            Call(p1.submission, "ClearLocal");
+            Check(p1.submission.IsLocalSubmitted && !p1.privateBoard.CanInteract, "Reconnect restores submitted consent and private lock from existing Client Variables");
+            Check(p1.submission.TryCancel(), "Participant can cancel consent before Reveal"); Tick(pair, 2);
+            Check(p1.privateBoard.CanInteract && !p1.submission.IsLocalSubmitted && pair.All(e => !e.reveal.HasRevealed), "Cancellation echo restores editing without revealing");
+            Check(p1.submission.TrySubmit() && p2.submission.TrySubmit(), "Both Participants explicitly Submit");
             foreach (var from in pair) foreach (var to in pair) if (from != to) Deliver(from, to);
             Set(p1.reveal, "nextAttempt", 0f); Call(p1.reveal, "LateUpdate"); Deliver(p1, p2);
             Call(p1.reveal, "LateUpdate");
@@ -90,6 +103,7 @@ public static class ProposedRevealVerification
                     foreach (var a in p.answers)
                         Check(e.view.transform.Find("ReadonlyMiniBoards/P" + p.displayId + "_InitialAnswer/Tier_" + a.tier + "/Cards/" + a.cardId) != null,
                             "Correct UI Tier parent: client " + e.net.ClientNo + " / P" + p.displayId + " / " + a.cardId);
+                Check(!e.submission.CanCancel && !e.submission.TryCancel(), "Submit cancellation rejected after Reveal on client " + e.net.ClientNo);
                 Check(!e.privateBoard.CanInteract && !e.privateBoard.TryPlaceCard("Card_01", "D"), "Private edits rejected after Reveal on client " + e.net.ClientNo);
                 Check(e.view.GetComponentsInChildren<Collider>(true).Length == 0 &&
                     e.view.GetComponentsInChildren<UnityEngine.UI.Selectable>(true).Length == 0 &&
@@ -123,6 +137,7 @@ public static class ProposedRevealVerification
             Check(pair.All(e => !e.session.IsResettingSession && e.session.SessionEpoch == 1 && e.manager.CurrentState == ExperimentManager.ExperimentState.Idle), "Both endpoints reset Epoch and ExperimentState");
             Check(pair.All(e => !e.reveal.HasRevealed && e.view.DisplayedParticipantCount == 0 && e.components.OfType<PrivateAnswerCard>().All(c => c.CurrentTier == "Unclassified")), "Session reset removes every Mini Board and resets Private positions");
             Check(pair.All(e => e.answers.GetParticipantCandidates(e.net.ClientNo).Values.All(a => !a.Answered && a.Tier == "Unclassified" && a.SelectedAt == "")), "Session reset clears candidate / answered / selectedAt on both clients");
+            Check(pair.All(e => !e.submission.IsLocalSubmitted && !e.submission.IsLocalLocked && SessionVariableTransport.GetClientVariable(e.net, e.session, IndependentAnswerSubmission.SubmittedVariable) == "false"), "Session Reset clears independent Submit and private locks");
             p1.Global(ProposedRevealCoordinator.RevealVariable, oldCommit); Call(p1.reveal, "LateUpdate");
             Check(!p1.reveal.HasRevealed && p1.view.DisplayedParticipantCount == 0, "Delayed previous-session Reveal cannot recreate old boards");
             var trio = Create(3);
@@ -130,18 +145,22 @@ public static class ProposedRevealVerification
                 if (p != 2 || c != 2) Check(trio[p].privateBoard.TryPlaceCard("Card_0" + (c + 1), new[] { "A", "B", "D" }[p]), "Three-participant setup answer P" + (p + 1) + " / card " + (c + 1));
             Tick(trio, 3);
             Check(trio.All(e => !e.reveal.HasRevealed), "P3's missing card prevents three-participant Reveal");
-            Check(trio[2].privateBoard.TryPlaceCard("Card_03", "D"), "P3 answers last card"); Tick(trio, 6);
+            Check(trio[2].privateBoard.TryPlaceCard("Card_03", "D"), "P3 answers last card"); Tick(trio, 2);
+            Check(trio.All(e => !e.reveal.HasRevealed), "Three completed participants still require explicit Submit");
+            foreach (var e in trio) Check(e.submission.TrySubmit(), "Submit participant " + e.net.ClientNo); Tick(trio, 6);
             Check(trio.All(e => e.reveal.HasRevealed && e.view.DisplayedParticipantCount == 3), "Dynamic three-participant Reveal and Grid succeed");
             Check(trio.All(e => e.reveal.GetRevealedSnapshot().participants.Length == 3) &&
                 trio[0].net.GetGlobalVariable(ProposedRevealCoordinator.RevealVariable).Length <= 1024, "Compressed three-participant payload respects actual NetSync 1024-character limit");
             Check(trio.All(e => e.reveal.GetRevealedSnapshot().participants.All(p => p.clientNo != 99)), "Experimenter client 99 is excluded from completion and UI");
             var race = Create(2);
             for (int p = 0; p < 2; p++) foreach (string id in race[p].answers.AnswerCardIds) race[p].privateBoard.TryPlaceCard(id, "A");
+            foreach (var e in race) e.submission.TrySubmit();
             Deliver(race[1], race[0]); Set(race[0].reveal, "nextAttempt", 0f); Call(race[0].reveal, "LateUpdate"); Deliver(race[0], race[1]);
+            Check(race[1].submission.TryCancel(), "In-flight Submit cancellation revokes consent before ACK"); Call(race[1].submission, "Update");
             Check(race[1].privateBoard.TryPlaceCard("Card_03", "Unclassified"), "In-flight cancellation before preparation ACK is accepted");
             Tick(race, 3);
             Check(race.All(e => !e.reveal.HasRevealed && !e.reveal.IsAnswerLocked && e.view.DisplayedParticipantCount == 0), "In-flight cancellation invalidates preparation and unlocks everyone without leaking");
-            race[1].privateBoard.TryPlaceCard("Card_03", "D"); Deliver(race[1], race[0]);
+            race[1].privateBoard.TryPlaceCard("Card_03", "D"); race[1].submission.TrySubmit(); Deliver(race[1], race[0]);
             Set(race[0].reveal, "nextAttempt", 0f); Call(race[0].reveal, "LateUpdate");
             Call(race[0].reveal, "LateUpdate");
             Set(race[0].reveal, "preparationStarted", Time.unscaledTime - 30);
@@ -186,7 +205,7 @@ public static class ProposedRevealVerification
         e.manager = One<ExperimentManager>(); e.registry = One<ExperimentParticipantRegistry>(); e.session = One<ExperimentSessionManager>();
         e.answers = One<CandidateSyncTest>(); e.privateBoard = One<PrivateTierBoardController>();
         e.reveal = One<ProposedRevealCoordinator>(); e.view = One<ReadonlyParticipantBoardView>();
-        e.placements = One<NormalPlacementSync>(); e.agreement = One<FinalAgreementManager>(); e.shared = One<ProposedSharedPlacementController>();
+        e.placements = One<NormalPlacementSync>(); e.agreement = One<FinalAgreementManager>(); e.shared = One<ProposedSharedPlacementController>(); e.submission = One<IndependentAnswerSubmission>();
         Set(e.registry, "localRole", ExperimentParticipantRegistry.ClientRole.Participant); Set(e.registry, "expectedParticipantCount", count);
         Set(e.manager, "currentMode", ExperimentManager.ExperimentMode.Proposed); Set(e.manager, "currentState", ExperimentManager.ExperimentState.Idle);
         foreach (var z in e.components.OfType<TierZone>()) Call(z, "Awake");
@@ -194,7 +213,7 @@ public static class ProposedRevealVerification
         foreach (var c in e.components.OfType<PrivateAnswerCard>()) Call(c, "Awake");
         Call(One<NormalPlacementSync>(), "Awake"); Call(e.privateBoard, "Awake"); Call(e.view, "Awake");
         Call(e.registry, "Start"); Call(e.manager, "Start"); Call(e.answers, "Start"); Call(e.session, "Start");
-        Call(e.placements, "Start"); Call(e.agreement, "Start"); Call(e.shared, "OnEnable");
+        Call(e.submission, "OnEnable"); Call(e.placements, "Start"); Call(e.agreement, "Start"); Call(e.shared, "OnEnable");
         Call(e.privateBoard, "OnEnable"); Call(e.privateBoard, "Start"); Call(e.privateBoard, "Update");
         Call(e.reveal, "OnEnable"); Call(e.view, "OnEnable"); Call(e.view, "Start");
         return e;

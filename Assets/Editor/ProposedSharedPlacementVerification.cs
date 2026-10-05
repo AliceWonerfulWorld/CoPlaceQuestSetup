@@ -33,7 +33,7 @@ public static class ProposedSharedPlacementVerification
                 {
                     foreach (var e in pair)
                     {
-                        Call(e.placements, "Update"); Call(e.agreement, "Update");
+                        Call(e.submission, "Update"); Call(e.placements, "Update"); Call(e.agreement, "Update");
                         Set(e.shared, "nextInitializationAttempt", 0f); Call(e.shared, "Update");
                         Call(e.privateBoard, "Update"); Call(e.components.OfType<FinalAgreementUI>().Single(), "Update");
                         Call(e.answers, "LateUpdate"); Set(e.reveal, "nextAttempt", 0f); Call(e.reveal, "LateUpdate");
@@ -59,6 +59,7 @@ public static class ProposedSharedPlacementVerification
                 string[] tiers = e == a ? new[] { "A", "B", "C" } : new[] { "D", "B", "A" };
                 for (int i = 0; i < 3; i++) Check(e.privateBoard.TryPlaceCard("Card_0" + (i + 1), tiers[i]), "Private answer client " + e.net.ClientNo + " / Card_0" + (i + 1));
             }
+            foreach (var e in pair) Check(e.submission.TrySubmit(), "Explicit independent Submit before shared placement / client " + e.net.ClientNo);
             Tick(8);
             Check(pair.All(e => e.reveal.HasRevealed && e.shared.IsActive && e.manager.CurrentState == ExperimentManager.ExperimentState.Discussion), "Reveal opens Proposed Discussion/shared placement on both endpoints");
             Check(pair.All(e => Main(e).All(c => c.CurrentTier == "Unclassified") &&

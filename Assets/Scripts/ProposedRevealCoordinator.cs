@@ -18,9 +18,10 @@ public class ProposedRevealCoordinator : MonoBehaviour
     [SerializeField] private ExperimentParticipantRegistry participantRegistry;
     [SerializeField] private ExperimentSessionManager sessionManager;
     [SerializeField] private CandidateSyncTest candidateSync;
+    [SerializeField] private IndependentAnswerSubmission independentSubmission;
     [SerializeField, Min(3)] private float preparationTimeout = 15;
     [Serializable] public class Answer { public string cardId, tier, selectedAt; public bool answered; }
-    [Serializable] public class Participant { public int clientNo, displayId; public Answer[] answers; }
+    [Serializable] public class Participant { public int clientNo, displayId; public string submissionId; public Answer[] answers; }
     [Serializable] public class Snapshot { public string id, sessionId; public long epoch; public int owner; public string[] cardIds; public Participant[] participants; }
     private Snapshot prepared, revealed;
     private string observedPrepare, expiredPrepare, sentPrepare, sentCommit;
@@ -94,7 +95,7 @@ public class ProposedRevealCoordinator : MonoBehaviour
         // ACK from authorizing a commit after an endpoint unlocked on its clock.
         if (proposal != null && proposal.owner == Network.ClientNo && Time.unscaledTime - preparationStarted >= preparationTimeout)
         {
-            if (expiredPrepare != id) Debug.LogWarning("[Proposed Reveal Aborted] Preparation timed out; answers unlocked", this);
+            if (expiredPrepare != id) Debug.LogWarning("[Proposed Reveal Aborted] Preparation timed out; submitted consent retained for retry", this);
             expiredPrepare = id;
         }
         bool accept = matches && expiredPrepare != id;
@@ -130,7 +131,7 @@ public class ProposedRevealCoordinator : MonoBehaviour
         if (Time.unscaledTime < nextAttempt) return;
         nextAttempt = Time.unscaledTime + 1;
         if (sentPrepare != null && Time.unscaledTime - preparationStarted < preparationTimeout) return;
-        var snapshot = BuildCompleteSnapshot();
+        var snapshot = BuildCompleteSnapshot(true);
         if (snapshot == null) return;
         if (Send(PrepareVariable, snapshot))
         {
@@ -139,7 +140,7 @@ public class ProposedRevealCoordinator : MonoBehaviour
         }
     }
     public bool AreAllAnswersComplete() => Ready && BuildCompleteSnapshot() != null;
-    private Snapshot BuildCompleteSnapshot()
+    private Snapshot BuildCompleteSnapshot(bool requireSubmitted = false)
     {
         var clients = participantRegistry.ParticipantClientNos;
         var cards = candidateSync.AnswerCardIds;
@@ -149,8 +150,10 @@ public class ProposedRevealCoordinator : MonoBehaviour
         for (int c = 0; c < cards.Count; c++) result.cardIds[c] = cards[c];
         for (int p = 0; p < clients.Count; p++)
         {
+            string consent = independentSubmission != null ? independentSubmission.GetSubmissionId(clients[p]) : null;
+            if (requireSubmitted && consent == null) return null;
             var answers = candidateSync.GetParticipantCandidates(clients[p]);
-            var participant = new Participant { clientNo = clients[p], displayId = p + 1, answers = new Answer[cards.Count] };
+            var participant = new Participant { clientNo = clients[p], displayId = p + 1, submissionId = consent, answers = new Answer[cards.Count] };
             for (int c = 0; c < cards.Count; c++)
             {
                 if (!answers.TryGetValue(cards[c], out var a) || !a.Answered ||
@@ -167,7 +170,9 @@ public class ProposedRevealCoordinator : MonoBehaviour
         if (clients.Count != participantRegistry.ExpectedParticipantCount || clients.Count != snapshot.participants.Length) return false;
         for (int p = 0; p < clients.Count; p++)
         {
-            if (clients[p] != snapshot.participants[p].clientNo) return false;
+            if (clients[p] != snapshot.participants[p].clientNo || independentSubmission == null ||
+                string.IsNullOrEmpty(snapshot.participants[p].submissionId) ||
+                independentSubmission.GetSubmissionId(clients[p]) != snapshot.participants[p].submissionId) return false;
             foreach (var a in snapshot.participants[p].answers)
                 if (!candidateSync.TryGetParticipantAnswer(clients[p], a.cardId, out var current) || !current.Answered ||
                     current.Tier != a.tier || current.SelectedAt != a.selectedAt ||
