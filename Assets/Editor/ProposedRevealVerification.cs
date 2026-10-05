@@ -18,7 +18,7 @@ public static class ProposedRevealVerification
 {
     private const BindingFlags Flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
     [Serializable] private class Report { public bool passed; public string[] checks; public string failure; }
-    private sealed class Endpoint
+    public sealed class Endpoint
     {
         public Scene scene;
         public NetSyncManager net;
@@ -30,6 +30,9 @@ public static class ProposedRevealVerification
         public PrivateTierBoardController privateBoard;
         public ProposedRevealCoordinator reveal;
         public ReadonlyParticipantBoardView view;
+        public NormalPlacementSync placements;
+        public FinalAgreementManager agreement;
+        public ProposedSharedPlacementController shared;
         public Component[] components;
         public void Peer(int client, string key, string value) => variables.GetType().GetMethod("SetClientVariable").Invoke(variables, new object[] { key, value, client, "reveal-test" });
         public void Global(string key, string value) => variables.GetType().GetMethod("SetGlobalVariable").Invoke(variables, new object[] { key, value, "reveal-test" });
@@ -158,7 +161,7 @@ public static class ProposedRevealVerification
             Debug.Log($"[Proposed Reveal Verification] {(report.passed ? "PASS" : "FAIL")} / {checks.Count} checks");
         }
     }
-    private static Endpoint CreateEndpoint(int client, int count)
+    public static Endpoint CreateEndpoint(int client, int count)
     {
         var e = new Endpoint { scene = EditorSceneManager.OpenPreviewScene("Assets/Scenes/QuestSetup.unity") };
         e.components = e.scene.GetRootGameObjects().SelectMany(o => o.GetComponentsInChildren<Component>(true)).ToArray();
@@ -183,6 +186,7 @@ public static class ProposedRevealVerification
         e.manager = One<ExperimentManager>(); e.registry = One<ExperimentParticipantRegistry>(); e.session = One<ExperimentSessionManager>();
         e.answers = One<CandidateSyncTest>(); e.privateBoard = One<PrivateTierBoardController>();
         e.reveal = One<ProposedRevealCoordinator>(); e.view = One<ReadonlyParticipantBoardView>();
+        e.placements = One<NormalPlacementSync>(); e.agreement = One<FinalAgreementManager>(); e.shared = One<ProposedSharedPlacementController>();
         Set(e.registry, "localRole", ExperimentParticipantRegistry.ClientRole.Participant); Set(e.registry, "expectedParticipantCount", count);
         Set(e.manager, "currentMode", ExperimentManager.ExperimentMode.Proposed); Set(e.manager, "currentState", ExperimentManager.ExperimentState.Idle);
         foreach (var z in e.components.OfType<TierZone>()) Call(z, "Awake");
@@ -190,11 +194,12 @@ public static class ProposedRevealVerification
         foreach (var c in e.components.OfType<PrivateAnswerCard>()) Call(c, "Awake");
         Call(One<NormalPlacementSync>(), "Awake"); Call(e.privateBoard, "Awake"); Call(e.view, "Awake");
         Call(e.registry, "Start"); Call(e.manager, "Start"); Call(e.answers, "Start"); Call(e.session, "Start");
+        Call(e.placements, "Start"); Call(e.agreement, "Start"); Call(e.shared, "OnEnable");
         Call(e.privateBoard, "OnEnable"); Call(e.privateBoard, "Start"); Call(e.privateBoard, "Update");
         Call(e.reveal, "OnEnable"); Call(e.view, "OnEnable"); Call(e.view, "Start");
         return e;
     }
-    private static void Deliver(Endpoint from, Endpoint to)
+    public static void Deliver(Endpoint from, Endpoint to)
     {
         foreach (var v in from.net.GetAllGlobalVariables()) to.Global(v.Key, v.Value);
         foreach (var v in from.net.GetAllClientVariables(from.net.ClientNo)) to.Peer(from.net.ClientNo, v.Key, v.Value);

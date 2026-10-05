@@ -5,9 +5,11 @@ using UnityEngine.XR.Interaction.Toolkit.Interactables;
 public class CardTierDetector : MonoBehaviour, UnityEngine.XR.Interaction.Toolkit.Filtering.IXRSelectFilter
 {
     public bool canProcess => isActiveAndEnabled;
+    private bool CanEditSharedBoard => normalPlacementSync != null ? normalPlacementSync.CanLocalEditSharedBoard :
+        experimentManager != null && experimentManager.CurrentMode == ExperimentManager.ExperimentMode.Normal;
     public bool Process(UnityEngine.XR.Interaction.Toolkit.Interactors.IXRSelectInteractor interactor,
         UnityEngine.XR.Interaction.Toolkit.Interactables.IXRSelectInteractable interactable)
-        => experimentManager != null && experimentManager.CurrentMode == ExperimentManager.ExperimentMode.Normal &&
+        => CanEditSharedBoard &&
             (normalPlacementSync == null || (!normalPlacementSync.IsResettingSession &&
             !normalPlacementSync.IsLocalInteractionLocked && !normalPlacementSync.IsCardConfirmed(gameObject.name)));
 
@@ -104,7 +106,7 @@ public class CardTierDetector : MonoBehaviour, UnityEngine.XR.Interaction.Toolki
 
     private void Update()
     {
-        TierZone target = experimentManager != null && experimentManager.CurrentMode == ExperimentManager.ExperimentMode.Normal &&
+        TierZone target = CanEditSharedBoard &&
             grabInteractable != null && grabInteractable.isSelected ? FindDropZone() : null;
         if (target == hoveredZone) return;
         if (hoveredZone != null) hoveredZone.SetHovered(gameObject, false);
@@ -171,7 +173,7 @@ public class CardTierDetector : MonoBehaviour, UnityEngine.XR.Interaction.Toolki
         if (normalPlacementSync != null && normalPlacementSync.RejectLocalInteraction(gameObject.name)) return;
         if (hoveredZone != null) hoveredZone.SetHovered(gameObject, false);
         hoveredZone = null;
-        if (experimentManager == null || experimentManager.CurrentMode != ExperimentManager.ExperimentMode.Normal)
+        if (!CanEditSharedBoard)
         {
             RestorePreviousPlacement();
             return;
@@ -214,8 +216,7 @@ public class CardTierDetector : MonoBehaviour, UnityEngine.XR.Interaction.Toolki
             $"{gameObject.name} classified as Tier {CurrentTier}"
             );
         
-        if (experimentManager != null &&
-            experimentManager.CurrentMode == ExperimentManager.ExperimentMode.Normal)
+        if (CanEditSharedBoard)
         {
             if (normalPlacementSync != null)
                 normalPlacementSync.SendPlacement(gameObject.name, CurrentTier);
@@ -245,7 +246,7 @@ public class CardTierDetector : MonoBehaviour, UnityEngine.XR.Interaction.Toolki
     // While held, return false so the synchronizer can retain the latest remote placement.
     public bool ApplySyncedPlacement(TierZone zone)
     {
-        if (normalPlacementSync == null || !normalPlacementSync.IsNormalMode
+        if (normalPlacementSync == null || !normalPlacementSync.IsSharedPlacementPhase
             || zone == null || grabInteractable.isSelected)
             return false;
 

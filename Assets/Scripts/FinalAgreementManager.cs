@@ -5,7 +5,7 @@ using System.Security.Cryptography;
 using Styly.NetSync;
 using UnityEngine;
 
-// Agreement transport is independent of XR/UI. The placement adapter is currently Normal-only.
+// Agreement transport is independent of XR/UI. The same placement adapter serves Normal and Proposed final shared placement.
 public class FinalAgreementManager : MonoBehaviour
 {
     public const string ReadyVariable = "finalReady";
@@ -29,13 +29,14 @@ public class FinalAgreementManager : MonoBehaviour
     public bool IsBoardConfirmed { get; private set; }
     public string StatusMessage { get; private set; } = "";
     public bool IsNormalPhase => experimentManager != null && experimentManager.CurrentMode == ExperimentManager.ExperimentMode.Normal;
+    public bool IsAgreementPhase => placementSync != null && placementSync.IsSharedPlacementPhase;
     public int LocalClientNo => network != null ? network.ClientNo : 0;
     public int ExpectedParticipantCount => participantRegistry != null ? participantRegistry.ExpectedParticipantCount : 0;
     public bool LocalApprovalPending => pendingReady != null;
     public bool IsLocalParticipant => participantRegistry != null && participantRegistry.IsLocalParticipant;
-    public bool IsLocalReady => IsNormalPhase && network != null && network.IsReady && IsParticipantReady(network.ClientNo);
-    public bool IsLocalInteractionLocked => IsNormalPhase && (IsBoardConfirmed || IsLocalReady || !string.IsNullOrEmpty(pendingReady));
-    public bool CanToggleReady => !SessionResetting && IsNormalPhase && IsLocalParticipant && network != null && network.IsReady && !IsBoardConfirmed;
+    public bool IsLocalReady => IsAgreementPhase && network != null && network.IsReady && IsParticipantReady(network.ClientNo);
+    public bool IsLocalInteractionLocked => IsAgreementPhase && (IsBoardConfirmed || IsLocalReady || !string.IsNullOrEmpty(pendingReady));
+    public bool CanToggleReady => !SessionResetting && IsAgreementPhase && IsLocalParticipant && network != null && network.IsReady && !IsBoardConfirmed;
     public IReadOnlyList<int> Participants => participantRegistry != null ? participantRegistry.ParticipantClientNos : Array.Empty<int>();
     [Serializable] private class PlacementVersion { public string tier; public string revision; }
     [Serializable] public class FinalEntry { public string cardId; public string tier; public string revision; }
@@ -90,14 +91,14 @@ public class FinalAgreementManager : MonoBehaviour
         if (SessionResetting) return;
         if (network == null || !network.IsReady) { networkWasReady = false; return; }
         if (!networkWasReady) OnReady();
-        if (IsNormalPhase != wasNormal)
+        if (IsAgreementPhase != wasNormal)
         {
-            wasNormal = IsNormalPhase; lastFingerprint = null;
+            wasNormal = IsAgreementPhase; lastFingerprint = null;
             if (wasNormal) RestoreBoard(SessionVariableTransport.GetGlobalVariable(network, sessionManager, BoardVariable));
             else { pendingReady = null; if (IsLocalParticipant) SessionVariableTransport.SetClientVariable(network, sessionManager, ReadyVariable, ""); }
             Changed();
         }
-        if (!IsNormalPhase) return;
+        if (!IsAgreementPhase) return;
         PublishHeldCards();
         string fingerprint = CurrentFingerprint();
         if (lastFingerprint != fingerprint)
@@ -116,7 +117,7 @@ public class FinalAgreementManager : MonoBehaviour
     }
     private void LateUpdate()
     {
-        if (SessionResetting || !IsNormalPhase || network == null || !network.IsReady) return;
+        if (SessionResetting || !IsAgreementPhase || network == null || !network.IsReady) return;
         participantRegistry.RefreshParticipants();
         int ready = 0; foreach (int client in Participants) if (IsParticipantReady(client)) ready++;
         string status = $"{ready}/{Participants.Count}/{IsBoardConfirmed}/{StatusMessage}";
@@ -152,7 +153,7 @@ public class FinalAgreementManager : MonoBehaviour
     }
     public bool IsParticipantReady(int clientNo)
     {
-        if (SessionResetting || network == null || !network.IsReady) return false;
+        if (SessionResetting || !IsAgreementPhase || network == null || !network.IsReady) return false;
         if (IsBoardConfirmed) return ContainsParticipant(clientNo);
         string fingerprint = CurrentFingerprint();
         return !string.IsNullOrEmpty(fingerprint) && SessionVariableTransport.GetClientVariable(network, sessionManager, ReadyVariable, clientNo) == fingerprint;
@@ -191,7 +192,7 @@ public class FinalAgreementManager : MonoBehaviour
     }
     public bool PreparePlacementChange(string cardId, string tier)
     {
-        if (SessionResetting || !IsNormalPhase || network == null || !network.IsReady || IsLocalInteractionLocked) return false;
+        if (SessionResetting || !IsAgreementPhase || network == null || !network.IsReady || IsLocalInteractionLocked) return false;
         string existing = SessionVariableTransport.GetGlobalVariable(network, sessionManager, "normalPlacement_" + cardId);
         var version = ReadVersion(cardId);
         if (existing == tier && version != null && version.tier == tier) return true;
@@ -258,7 +259,7 @@ public class FinalAgreementManager : MonoBehaviour
         if (name.StartsWith(VersionPrefix, StringComparison.Ordinal) || name.StartsWith("normalPlacement_", StringComparison.Ordinal))
         {
             // Clear this client's approval immediately, before LateUpdate can finalize an obsolete board.
-            if (IsNormalPhase && !IsBoardConfirmed && oldValue != newValue)
+            if (IsAgreementPhase && !IsBoardConfirmed && oldValue != newValue)
             {
                 string proof = !string.IsNullOrEmpty(pendingReady) ? pendingReady : SessionVariableTransport.GetClientVariable(network, sessionManager, ReadyVariable);
                 if (!string.IsNullOrEmpty(proof) && CurrentFingerprint() == proof) return;
@@ -277,10 +278,11 @@ public class FinalAgreementManager : MonoBehaviour
     }
     private void RestoreBoard(string value)
     {
-        if (string.IsNullOrEmpty(value)) return;
+        if (!IsAgreementPhase || string.IsNullOrEmpty(value)) return;
         BoardRecord record;
         try { record = JsonUtility.FromJson<BoardRecord>(value); } catch { return; }
         if (record == null || string.IsNullOrEmpty(record.sessionId)) return;
+        if (!IsNormalPhase && record.sessionId != placementSync.SharedAgreementId) return;
         if (!record.confirmed)
         {
             bool reset = sessionId != record.sessionId || IsBoardConfirmed;
@@ -291,7 +293,7 @@ public class FinalAgreementManager : MonoBehaviour
             {
                 if (network.IsReady && IsLocalParticipant) SessionVariableTransport.SetClientVariable(network, sessionManager, ReadyVariable, "");
                 placementSync.SetBoardConfirmation(finalPlacements, false);
-                if (IsNormalPhase) experimentManager.SetState(ExperimentManager.ExperimentState.Idle);
+                if (IsAgreementPhase) experimentManager.SetState(IsNormalPhase ? ExperimentManager.ExperimentState.Idle : ExperimentManager.ExperimentState.Discussion);
                 Changed();
             }
             return;
@@ -310,7 +312,7 @@ public class FinalAgreementManager : MonoBehaviour
         sessionId = record.sessionId; IsBoardConfirmed = true; finalPlacements.Clear(); foreach (var pair in snapshot) finalPlacements.Add(pair.Key, pair.Value);
         pendingReady = null; StatusMessage = "Board confirmed";
         placementSync.SetBoardConfirmation(finalPlacements, true);
-        if (IsNormalPhase) experimentManager.SetState(ExperimentManager.ExperimentState.Confirmed);
+        if (IsAgreementPhase) experimentManager.SetState(ExperimentManager.ExperimentState.Confirmed);
         if (first)
         {
             foreach (var pair in finalPlacements) Debug.Log($"[Board Confirmed] {pair.Key} -> {pair.Value}");
@@ -329,19 +331,19 @@ public class FinalAgreementManager : MonoBehaviour
     {
         Subscribe();
         if (network != null && network.IsReady) RestoreBoard(SessionVariableTransport.GetGlobalVariable(network, sessionManager, BoardVariable));
-        networkWasReady = true; wasNormal = IsNormalPhase;
+        networkWasReady = true; wasNormal = IsAgreementPhase;
     }
     // Future Reset Board UI can call this; placements are retained, approval epoch is replaced.
     public bool ResetBoardAgreement()
     {
-        if (network == null || !network.IsReady || participantRegistry == null || !participantRegistry.IsLocalExperimenter || !IsNormalPhase) return false;
+        if (network == null || !network.IsReady || participantRegistry == null || !participantRegistry.IsLocalExperimenter || !IsAgreementPhase) return false;
         foreach (var pair in finalPlacements)
         {
             if (!SessionVariableTransport.SetGlobalVariable(network, sessionManager, VersionPrefix + pair.Key,
                 JsonUtility.ToJson(new PlacementVersion { tier = pair.Value, revision = Guid.NewGuid().ToString("N") }))) return false;
             if (!SessionVariableTransport.SetGlobalVariable(network, sessionManager, "normalPlacement_" + pair.Key, pair.Value)) return false;
         }
-        return SessionVariableTransport.SetGlobalVariable(network, sessionManager, BoardVariable, JsonUtility.ToJson(new BoardRecord { confirmed = false, sessionId = Guid.NewGuid().ToString("N") }));
+        return SessionVariableTransport.SetGlobalVariable(network, sessionManager, BoardVariable, JsonUtility.ToJson(new BoardRecord { confirmed = false, sessionId = IsNormalPhase ? Guid.NewGuid().ToString("N") : placementSync.SharedAgreementId }));
     }
     private void Changed() => OnStatusChanged?.Invoke();
 }

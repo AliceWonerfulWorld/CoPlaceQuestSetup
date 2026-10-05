@@ -14,7 +14,7 @@ public partial class NormalPlacementSync
     public CardTierDetector GetCard(string cardId) => cardId != null && cardsById.TryGetValue(cardId, out var card) ? card : null;
     public bool IsCardConfirmed(string cardId) => cardId != null && finalTiers.ContainsKey(cardId);
     public string GetFinalTier(string cardId) => cardId != null && finalTiers.TryGetValue(cardId, out var tier) ? tier : null;
-    public bool IsLocalInteractionLocked => IsNormalMode && finalAgreement != null && finalAgreement.IsLocalInteractionLocked;
+    public bool IsLocalInteractionLocked => IsSharedPlacementPhase && finalAgreement != null && finalAgreement.IsLocalInteractionLocked;
 
     [Obsolete("Use Participant agreement via FinalAgreementManager.ToggleLocalReady().")]
     public bool ConfirmCurrentCard() => ConfirmCard(experimentManager != null ? experimentManager.CurrentCardId : null);
@@ -41,15 +41,15 @@ public partial class NormalPlacementSync
         foreach (var entry in cardsById)
         {
             if (entry.Value == null) continue;
-            bool locked = IsNormalMode && IsCardConfirmed(entry.Key);
+            bool locked = IsSharedPlacementPhase && IsCardConfirmed(entry.Key);
             entry.Value.SetNormalConfirmationLock(locked, locked ? zonesByTier[GetFinalTier(entry.Key)] : null);
         }
-        if (IsNormalMode && finalTiers.Count > 0 && experimentManager.CurrentState != ExperimentManager.ExperimentState.Confirmed)
+        if (IsSharedPlacementPhase && finalTiers.Count > 0 && experimentManager.CurrentState != ExperimentManager.ExperimentState.Confirmed)
             experimentManager.SetState(ExperimentManager.ExperimentState.Confirmed);
     }
     public bool RejectConfirmedPlacement(string cardId)
     {
-        if (!IsNormalMode || !IsCardConfirmed(cardId)) return false;
+        if (!IsSharedPlacementPhase || !IsCardConfirmed(cardId)) return false;
         Debug.LogWarning($"[Normal Placement Rejected] {cardId} is confirmed at Tier {GetFinalTier(cardId)}", this);
         if (GetCard(cardId) != null) GetCard(cardId).SetNormalConfirmationLock(true, zonesByTier[GetFinalTier(cardId)]);
         return true;
@@ -57,6 +57,7 @@ public partial class NormalPlacementSync
     public bool RejectLocalInteraction(string cardId)
     {
         if (IsResettingSession) return true;
+        if (!CanLocalEditSharedBoard) return true;
         if (RejectConfirmedPlacement(cardId)) return true;
         if (!IsLocalInteractionLocked) return false;
         Debug.LogWarning("[Card Interaction Rejected] Local participant is already ready", this);

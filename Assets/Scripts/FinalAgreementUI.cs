@@ -17,7 +17,7 @@ public class FinalAgreementUI : MonoBehaviour
     private void Update()
     {
         if (agreement == null) return;
-        canvas.enabled = agreement.IsNormalPhase;
+        canvas.enabled = agreement.IsAgreementPhase;
         readyButton.interactable = agreement.CanToggleReady && Time.unscaledTime - lastAcceptedClickTime >= ClickCooldownSeconds;
         string label = agreement.IsBoardConfirmed ? "Board Confirmed" : (agreement.IsLocalReady || agreement.LocalApprovalPending) ? "Cancel Ready" : "This board is OK";
         if (buttonText.text != label) buttonText.text = label;

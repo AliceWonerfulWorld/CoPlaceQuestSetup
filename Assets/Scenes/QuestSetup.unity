@@ -1604,6 +1604,7 @@ MonoBehaviour:
   sessionManager: {fileID: 2006167394}
   candidateSync: {fileID: 1952900592}
   revealCoordinator: {fileID: 998521716}
+  sharedPlacement: {fileID: 998521718}
   contentRoot: {fileID: 1344478145}
   cards:
   - {fileID: 458723563}
@@ -3284,7 +3285,7 @@ MonoBehaviour:
     displayName: Card_03
     texture: {fileID: 2800000, guid: e39e77a94c7f04d6e8b677b3649c106f, type: 3}
   columns: 2
-  canvasScale: 0.0011
+  canvasScale: 0.0009
   boardSize: {x: 720, y: 840}
   spacing: {x: 110, y: 100}
   accent: {r: 0.38, g: 0.85, b: 0.8, a: 1}
@@ -3296,8 +3297,8 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 239894763}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 1.45, z: 1.6}
+  m_LocalRotation: {x: 0, y: -0.1305262, z: 0, w: 0.9914449}
+  m_LocalPosition: {x: -2.25, y: 2.19, z: 0.32499996}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -12963,6 +12964,7 @@ GameObject:
   m_Component:
   - component: {fileID: 998521717}
   - component: {fileID: 998521716}
+  - component: {fileID: 998521718}
   m_Layer: 0
   m_Name: ProposedReveal
   m_TagString: Untagged
@@ -13002,6 +13004,24 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &998521718
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 998521715}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 98cbf06b8f27f4e61b9fda4cd58138e9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ProposedSharedPlacementController
+  experimentManager: {fileID: 2006167391}
+  participantRegistry: {fileID: 2006167393}
+  sessionManager: {fileID: 2006167394}
+  revealCoordinator: {fileID: 998521716}
+  placementSync: {fileID: 1553814476}
+  finalAgreement: {fileID: 1553814478}
 --- !u!1 &1000711973
 GameObject:
   m_ObjectHideFlags: 0
@@ -20699,6 +20719,7 @@ MonoBehaviour:
   experimentManager: {fileID: 2006167391}
   netSyncManager: {fileID: 496949780}
   sessionManager: {fileID: 2006167394}
+  proposedSharedPlacement: {fileID: 998521718}
   cards:
   - {fileID: 1412968708}
   - {fileID: 1992067530}

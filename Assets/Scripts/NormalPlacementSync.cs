@@ -10,6 +10,7 @@ public partial class NormalPlacementSync : MonoBehaviour
     [SerializeField] private ExperimentManager experimentManager;
     [SerializeField] private NetSyncManager netSyncManager;
     [SerializeField] private ExperimentSessionManager sessionManager;
+    [SerializeField] private ProposedSharedPlacementController proposedSharedPlacement;
     [SerializeField] private CardTierDetector[] cards;
     [SerializeField] private TierZone[] tierZones;
 
@@ -24,6 +25,11 @@ public partial class NormalPlacementSync : MonoBehaviour
     public bool HasUnclassifiedZone => zonesByTier.ContainsKey("Unclassified");
     public bool IsNormalMode => experimentManager != null
         && experimentManager.CurrentMode == ExperimentManager.ExperimentMode.Normal;
+    public bool IsSharedPlacementPhase => IsNormalMode || (proposedSharedPlacement != null && proposedSharedPlacement.IsActive);
+    public string SharedAgreementId => proposedSharedPlacement != null ? proposedSharedPlacement.AgreementId : null;
+    public bool CanLocalEditSharedBoard => IsSharedPlacementPhase && !IsResettingSession &&
+        (IsNormalMode || (participantRegistry != null && participantRegistry.IsLocalParticipant &&
+        subscribedManager != null && participantRegistry.IsRegisteredParticipant(subscribedManager.ClientNo)));
 
     private void Awake()
     {
@@ -87,7 +93,7 @@ public partial class NormalPlacementSync : MonoBehaviour
         Subscribe();
         if (IsResettingSession) return;
         RefreshConfirmationLocks();
-        bool normalAndReady = IsNormalMode && subscribedManager != null && subscribedManager.IsReady;
+        bool normalAndReady = IsSharedPlacementPhase && subscribedManager != null && subscribedManager.IsReady;
         if (!normalAndReady)
         {
             pendingPlacements.Clear();
@@ -112,7 +118,7 @@ public partial class NormalPlacementSync : MonoBehaviour
 
     private void OnNetworkReady()
     {
-        if (IsResettingSession || !IsNormalMode || subscribedManager == null || !subscribedManager.IsReady) return;
+        if (IsResettingSession || !IsSharedPlacementPhase || subscribedManager == null || !subscribedManager.IsReady) return;
         ReadSharedPlacements();
         wasNormalAndReady = true;
     }
@@ -135,11 +141,11 @@ public partial class NormalPlacementSync : MonoBehaviour
         if (!zonesByTier.TryGetValue("Unclassified", out var zone)) throw new InvalidOperationException("Unclassified TierZone missing");
         foreach (var card in cardsById.Values) card.ResetSessionPlacement(zone);
     }
-    public void RestoreSessionPlacements() { if (IsNormalMode && subscribedManager != null && subscribedManager.IsReady) ReadSharedPlacements(); }
+    public void RestoreSessionPlacements() { Subscribe(); if (IsSharedPlacementPhase && subscribedManager != null && subscribedManager.IsReady) ReadSharedPlacements(); }
 
     public bool SendPlacement(string cardId, string tierId)
     {
-        if (IsResettingSession || !isActiveAndEnabled || !IsNormalMode) return false;
+        if (IsResettingSession || !isActiveAndEnabled || !CanLocalEditSharedBoard) return false;
         if (RejectLocalInteraction(cardId)) return false;
         if (string.IsNullOrEmpty(cardId) || !cardsById.ContainsKey(cardId)
             || string.IsNullOrEmpty(tierId) || !zonesByTier.ContainsKey(tierId))
@@ -170,7 +176,7 @@ public partial class NormalPlacementSync : MonoBehaviour
 
     private void OnGlobalVariableChanged(string name, string oldValue, string newValue)
     {
-        if (IsResettingSession || !IsNormalMode || string.IsNullOrEmpty(name)
+        if (IsResettingSession || !IsSharedPlacementPhase || string.IsNullOrEmpty(name)
             || !name.StartsWith(VariablePrefix, StringComparison.Ordinal)) return;
 
         newValue = SessionVariableTransport.Decode(sessionManager, newValue);

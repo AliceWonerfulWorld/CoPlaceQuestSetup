@@ -14,6 +14,7 @@ public class PrivateTierBoardController : MonoBehaviour
     [SerializeField] private ExperimentSessionManager sessionManager;
     [SerializeField] private CandidateSyncTest candidateSync;
     [SerializeField] private ProposedRevealCoordinator revealCoordinator;
+    [SerializeField] private ProposedSharedPlacementController sharedPlacement;
     [SerializeField] private GameObject contentRoot;
     [SerializeField] private PrivateAnswerCard[] cards;
     [SerializeField] private TierZone[] tierZones;
@@ -98,7 +99,8 @@ public class PrivateTierBoardController : MonoBehaviour
         if (contentRoot != null && contentRoot.activeSelf != IsVisible) contentRoot.SetActive(IsVisible);
         foreach (var card in cards) if (card != null) card.SetInteractionEnabled(CanInteract);
         // Leave Main components alive for NetSync/Final Agreement/Session Reset.
-        SetMainHidden(experimentManager != null && experimentManager.CurrentMode == ExperimentManager.ExperimentMode.Proposed);
+        SetMainHidden(experimentManager != null && experimentManager.CurrentMode == ExperimentManager.ExperimentMode.Proposed &&
+            (sharedPlacement == null || !sharedPlacement.IsActive));
         if (instructions != null)
         {
             string text = revealCoordinator != null && revealCoordinator.IsAnswerLocked && !revealCoordinator.HasRevealed ? "All answers complete. Preparing simultaneous reveal..." :

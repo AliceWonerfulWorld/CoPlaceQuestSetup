@@ -26,6 +26,7 @@ public class ProposedRevealCoordinator : MonoBehaviour
     private string observedPrepare, expiredPrepare, sentPrepare, sentCommit;
     private float preparationStarted, nextAttempt;
     public bool HasRevealed => revealed != null;
+    public string RevealId => revealed != null ? revealed.id : null;
     public bool IsAnswerLocked => HasRevealed || prepared != null;
     // Return a copy so presentation cannot mutate the committed data.
     public Snapshot GetRevealedSnapshot() => revealed == null ? null : JsonUtility.FromJson<Snapshot>(JsonUtility.ToJson(revealed));
@@ -66,7 +67,8 @@ public class ProposedRevealCoordinator : MonoBehaviour
         if (commit != null && !HasRevealed)
         {
             revealed = commit; prepared = null;
-            experimentManager.SetState(ExperimentManager.ExperimentState.Revealed);
+            if (CandidateSyncTest.IsIndependentState(experimentManager.CurrentState))
+                experimentManager.SetState(ExperimentManager.ExperimentState.Revealed);
             Debug.Log($"[Proposed Reveal] Session {commit.sessionId} / {commit.participants.Length} Participants x {commit.cardIds.Length} Cards / {commit.id}", this);
             OnRevealChanged?.Invoke();
         }
