@@ -25,7 +25,8 @@ public partial class NormalPlacementSync : MonoBehaviour
     public bool HasUnclassifiedZone => zonesByTier.ContainsKey("Unclassified");
     public bool IsNormalMode => experimentManager != null
         && experimentManager.CurrentMode == ExperimentManager.ExperimentMode.Normal;
-    public bool IsSharedPlacementPhase => IsNormalMode || (proposedSharedPlacement != null && proposedSharedPlacement.IsActive);
+    public bool IsSharedPlacementPhase => experimentManager != null && experimentManager.CanRunExperiment &&
+        (IsNormalMode || (proposedSharedPlacement != null && proposedSharedPlacement.IsActive));
     public string SharedAgreementId => proposedSharedPlacement != null ? proposedSharedPlacement.AgreementId : null;
     public bool CanLocalEditSharedBoard => IsSharedPlacementPhase && !IsResettingSession &&
         (IsNormalMode || (participantRegistry != null && participantRegistry.IsLocalParticipant &&

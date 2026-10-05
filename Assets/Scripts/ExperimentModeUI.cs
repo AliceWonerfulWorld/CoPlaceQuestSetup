@@ -5,6 +5,10 @@ public class ExperimentModeUI : MonoBehaviour
 {
     [SerializeField] private ExperimentManager experimentManager;
     [SerializeField] private TMP_Text modeText;
+    [SerializeField] private ExperimentParticipantRegistry participantRegistry;
+    [SerializeField] private Canvas canvas;
+    private void Update() { if (canvas != null) canvas.enabled = experimentManager != null && experimentManager.CanRunExperiment &&
+        (participantRegistry == null || participantRegistry.IsLocalExperimenter); }
 
     private void OnEnable()
     {
@@ -34,6 +38,7 @@ public class ExperimentModeUI : MonoBehaviour
 
     private void SetMode(ExperimentManager.ExperimentMode mode)
     {
+        if ((participantRegistry != null && !participantRegistry.IsLocalExperimenter) || (experimentManager != null && !experimentManager.CanRunExperiment)) return;
         if (experimentManager == null)
         {
             Debug.LogWarning("[ExperimentModeUI] ExperimentManager is not assigned.", this);

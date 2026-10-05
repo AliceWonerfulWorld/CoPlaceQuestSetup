@@ -21,7 +21,7 @@ public class CandidateSyncTest : MonoBehaviour
     public IReadOnlyList<string> AnswerCardIds => answerCardIds;
     public int LocalClientNo => Network != null ? Network.ClientNo : 0;
     public bool IsDataReady => Network != null && Network.IsReady && (sessionManager == null || !sessionManager.IsResettingSession);
-    public bool IsIndependentAnswerPhase => IsProposed && IsIndependentState(experimentManager.CurrentState);
+    public bool IsIndependentAnswerPhase => IsProposed && experimentManager.CanRunExperiment && IsIndependentState(experimentManager.CurrentState);
     public static bool IsIndependentState(ExperimentManager.ExperimentState state) =>
         state == ExperimentManager.ExperimentState.Idle || state == ExperimentManager.ExperimentState.Answering ||
         state == ExperimentManager.ExperimentState.WaitingForAnswers;
@@ -240,6 +240,7 @@ public class CandidateSyncTest : MonoBehaviour
     }
     private void LateUpdate()
     {
+        if (experimentManager != null && !experimentManager.CanRunExperiment) { HideLegacyAnswerViews(); return; }
         if (!IsProposed || subscribedManager == null || !subscribedManager.IsReady || participantRegistry == null) return;
         participantRegistry.RefreshParticipants();
         if (usePrivateAnswerBoard)

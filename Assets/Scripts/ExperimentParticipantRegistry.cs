@@ -8,6 +8,7 @@ public class ExperimentParticipantRegistry : MonoBehaviour
 {
     public enum ClientRole { AutoByPlatform, Participant, Experimenter }
     public const string RoleVariable = "experimentRole";
+    public const string ExpectedCountVariable = "experimentExpectedParticipantCount";
     [SerializeField] private NetSyncManager netSyncManager;
     [SerializeField, Tooltip("Auto: Editor = Experimenter, Player/Quest = Participant. Use Participant for Editor participant tests.")]
     private ClientRole localRole = ClientRole.AutoByPlatform;
@@ -16,10 +17,29 @@ public class ExperimentParticipantRegistry : MonoBehaviour
     private readonly List<int> participants = new List<int>();
     private NetSyncManager subscribedManager;
     private string publishedRole;
+    private string publishedExpectedCount;
     private float nextRefresh;
     public event Action OnParticipantsChanged;
     public IReadOnlyList<int> ParticipantClientNos => participants;
-    public int ExpectedParticipantCount => Mathf.Max(1, expectedParticipantCount);
+    public int ExpectedParticipantCount
+    {
+        get
+        {
+            var net = Network;
+            if (net != null && net.IsReady)
+            {
+                int authority = int.MaxValue;
+                foreach (int client in net.GetAliveClients(includeStealthClients: true))
+                    if (net.GetClientVariable(RoleVariable, client) == ClientRole.Experimenter.ToString())
+                        authority = Math.Min(authority, client);
+                if (IsLocalExperimenter && net.ClientNo > 0) authority = Math.Min(authority, net.ClientNo);
+                if (authority == net.ClientNo && IsLocalExperimenter) return Mathf.Max(1, expectedParticipantCount);
+                if (authority != int.MaxValue && int.TryParse(net.GetClientVariable(ExpectedCountVariable, authority), out int count) && count > 0)
+                    return count;
+            }
+            return Mathf.Max(1, expectedParticipantCount);
+        }
+    }
     public NetSyncManager Network => netSyncManager != null ? netSyncManager : NetSyncManager.Instance;
     public bool IsLocalParticipant => EffectiveRole == ClientRole.Participant;
     public bool IsLocalExperimenter => EffectiveRole == ClientRole.Experimenter;
@@ -37,6 +57,7 @@ public class ExperimentParticipantRegistry : MonoBehaviour
         }
         subscribedManager = null;
         publishedRole = null;
+        publishedExpectedCount = null;
     }
 
     private void Subscribe()
@@ -52,8 +73,18 @@ public class ExperimentParticipantRegistry : MonoBehaviour
     private void OnReady()
     {
         publishedRole = null;
+        publishedExpectedCount = null;
         PublishRole();
+        PublishExpectedCount();
         RefreshParticipants();
+    }
+
+    private void PublishExpectedCount()
+    {
+        if (subscribedManager == null || !subscribedManager.IsReady || !IsLocalExperimenter) return;
+        string count = Mathf.Max(1, expectedParticipantCount).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        if (publishedExpectedCount != count && subscribedManager.SetClientVariable(ExpectedCountVariable, count))
+            publishedExpectedCount = count;
     }
 
     private void PublishRole()
@@ -67,8 +98,9 @@ public class ExperimentParticipantRegistry : MonoBehaviour
     private void Update()
     {
         Subscribe();
-        if (subscribedManager == null || !subscribedManager.IsReady) { publishedRole = null; return; }
+        if (subscribedManager == null || !subscribedManager.IsReady) { publishedRole = publishedExpectedCount = null; return; }
         PublishRole();
+        PublishExpectedCount();
         if (Time.unscaledTime >= nextRefresh)
         {
             nextRefresh = Time.unscaledTime + 1;
@@ -79,6 +111,7 @@ public class ExperimentParticipantRegistry : MonoBehaviour
     private void OnVariableChanged(int client, string name, string oldValue, string newValue)
     {
         if (name == RoleVariable) RefreshParticipants();
+        if (name == ExpectedCountVariable) OnParticipantsChanged?.Invoke();
     }
 
     public void RefreshParticipants()

@@ -10,6 +10,9 @@ public class ExperimentManager : MonoBehaviour
    [Header("Room Mode Sync")]
    [SerializeField] private NetSyncManager netSyncManager;
     [SerializeField] private ExperimentSessionManager sessionManager;
+    [SerializeField] private ExperimentLobbyController lobby;
+    public bool CanRunExperiment => lobby == null || lobby.IsExperimentStarted;
+    public bool IsLobbyWaiting => lobby != null && lobby.IsLobbyVisible;
    [SerializeField] private bool canChangeMode = true;
    private NetSyncManager subscribedManager;
    private bool started;
@@ -225,7 +228,7 @@ public class ExperimentManager : MonoBehaviour
 
    public void StartCard(string cardId)
    {
-        if (sessionManager != null && sessionManager.IsResettingSession) return;
+        if (!CanRunExperiment || (sessionManager != null && sessionManager.IsResettingSession)) return;
         currentCardId = cardId;
         currentState = ExperimentState.Answering;
         PublishState();

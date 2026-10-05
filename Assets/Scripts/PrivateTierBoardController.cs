@@ -33,7 +33,7 @@ public class PrivateTierBoardController : MonoBehaviour
 #if UNITY_EDITOR
     private string selectedCardId = "Card_01";
 #endif
-    public bool IsVisible => experimentManager != null && participantRegistry != null && participantRegistry.IsLocalParticipant &&
+    public bool IsVisible => experimentManager != null && experimentManager.CanRunExperiment && participantRegistry != null && participantRegistry.IsLocalParticipant &&
         experimentManager.CurrentMode == ExperimentManager.ExperimentMode.Proposed && !IsResetting &&
         (revealCoordinator == null || !revealCoordinator.HasRevealed);
     private bool IsResetting => sessionManager != null && sessionManager.IsResettingSession;
@@ -102,8 +102,8 @@ public class PrivateTierBoardController : MonoBehaviour
         if (contentRoot != null && contentRoot.activeSelf != IsVisible) contentRoot.SetActive(IsVisible);
         foreach (var card in cards) if (card != null) card.SetInteractionEnabled(CanInteract);
         // Leave Main components alive for NetSync/Final Agreement/Session Reset.
-        SetMainHidden(experimentManager != null && experimentManager.CurrentMode == ExperimentManager.ExperimentMode.Proposed &&
-            (sharedPlacement == null || !sharedPlacement.IsActive));
+        SetMainHidden(experimentManager != null && (!experimentManager.CanRunExperiment ||
+            (experimentManager.CurrentMode == ExperimentManager.ExperimentMode.Proposed && (sharedPlacement == null || !sharedPlacement.IsActive))));
         if (instructions != null)
         {
             string text = independentSubmission != null && independentSubmission.IsLocalLocked ? "Answers submitted. Waiting for other Participants..." : revealCoordinator != null && revealCoordinator.IsAnswerLocked && !revealCoordinator.HasRevealed ? "All answers complete. Preparing simultaneous reveal..." :

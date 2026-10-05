@@ -48,6 +48,7 @@ public static class PrivateTierBoardVerification
             var session = One<ExperimentSessionManager>(); var sync = One<CandidateSyncTest>();
             var normal = One<NormalPlacementSync>(); var board = One<PrivateTierBoardController>();
             Set(registry, "localRole", ExperimentParticipantRegistry.ClientRole.Participant);
+            Set(manager, "lobby", null); // Isolate the existing post-Start flow.
             Set(manager, "currentMode", ExperimentManager.ExperimentMode.Proposed);
             Set(manager, "currentState", ExperimentManager.ExperimentState.Idle);
             foreach (var zone in components.OfType<TierZone>()) Call(zone, "Awake");
@@ -99,8 +100,10 @@ public static class PrivateTierBoardVerification
             Set(manager, "currentState", ExperimentManager.ExperimentState.Idle);
             Set(registry, "localRole", ExperimentParticipantRegistry.ClientRole.Experimenter); Call(board, "Update");
             Check(!board.IsVisible && !board.CanInteract, "Experimenter sees no private board");
+            Set(manager, "lobby", null); // Isolate the existing post-Start flow.
             Set(manager, "currentMode", ExperimentManager.ExperimentMode.Normal); Call(board, "Update");
             Check(!board.IsVisible && !board.CanInteract && mains.All(c => c.GetComponent<Renderer>().enabled), "Normal restores Main visuals and disables Private input");
+            Set(manager, "lobby", null); // Isolate the existing post-Start flow.
             Set(manager, "currentMode", ExperimentManager.ExperimentMode.Proposed);
             Set(registry, "localRole", ExperimentParticipantRegistry.ClientRole.Participant); Call(board, "Update");
             // Move only the local view away from the server snapshot, then simulate OnReady.

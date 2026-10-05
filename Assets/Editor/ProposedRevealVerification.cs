@@ -34,6 +34,7 @@ public static class ProposedRevealVerification
         public FinalAgreementManager agreement;
         public ProposedSharedPlacementController shared;
         public IndependentAnswerSubmission submission;
+        public ExperimentLobbyController lobby;
         public Component[] components;
         public void Peer(int client, string key, string value) => variables.GetType().GetMethod("SetClientVariable").Invoke(variables, new object[] { key, value, client, "reveal-test" });
         public void Global(string key, string value) => variables.GetType().GetMethod("SetGlobalVariable").Invoke(variables, new object[] { key, value, "reveal-test" });
@@ -205,7 +206,9 @@ public static class ProposedRevealVerification
         e.manager = One<ExperimentManager>(); e.registry = One<ExperimentParticipantRegistry>(); e.session = One<ExperimentSessionManager>();
         e.answers = One<CandidateSyncTest>(); e.privateBoard = One<PrivateTierBoardController>();
         e.reveal = One<ProposedRevealCoordinator>(); e.view = One<ReadonlyParticipantBoardView>();
-        e.placements = One<NormalPlacementSync>(); e.agreement = One<FinalAgreementManager>(); e.shared = One<ProposedSharedPlacementController>(); e.submission = One<IndependentAnswerSubmission>();
+        e.placements = One<NormalPlacementSync>(); e.agreement = One<FinalAgreementManager>(); e.lobby = One<ExperimentLobbyController>(); Set(e.manager, "lobby", null); // These QA cases isolate the post-Start experiment flow.
+        Call(e.lobby, "OnEnable");
+        e.shared = One<ProposedSharedPlacementController>(); e.submission = One<IndependentAnswerSubmission>();
         Set(e.registry, "localRole", ExperimentParticipantRegistry.ClientRole.Participant); Set(e.registry, "expectedParticipantCount", count);
         Set(e.manager, "currentMode", ExperimentManager.ExperimentMode.Proposed); Set(e.manager, "currentState", ExperimentManager.ExperimentState.Idle);
         foreach (var z in e.components.OfType<TierZone>()) Call(z, "Awake");

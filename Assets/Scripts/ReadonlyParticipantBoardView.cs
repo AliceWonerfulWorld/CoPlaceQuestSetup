@@ -40,7 +40,7 @@ public class ReadonlyParticipantBoardView : MonoBehaviour
     }
     public void Refresh()
     {
-        var snapshot = revealCoordinator != null ? revealCoordinator.GetRevealedSnapshot() : null;
+        var snapshot = revealCoordinator != null && revealCoordinator.CanDisplayReveal ? revealCoordinator.GetRevealedSnapshot() : null;
         if (snapshot == null) { Clear(); return; }
         if (displayedId == snapshot.id) return;
         Clear();

@@ -21,7 +21,7 @@ public class ProposedSharedPlacementController : MonoBehaviour
     public string AgreementId => string.IsNullOrEmpty(observedRevealId) ? null : "proposed:" + observedRevealId;
     private NetSyncManager Network => participantRegistry != null ? participantRegistry.Network : null;
     private bool ContextReady => isActiveAndEnabled && experimentManager != null &&
-        experimentManager.CurrentMode == ExperimentManager.ExperimentMode.Proposed && revealCoordinator != null &&
+        experimentManager.CanRunExperiment && experimentManager.CurrentMode == ExperimentManager.ExperimentMode.Proposed && revealCoordinator != null &&
         revealCoordinator.HasRevealed && Network != null && Network.IsReady &&
         sessionManager != null && !sessionManager.IsResettingSession;
     [Serializable] private class PlacementVersion { public string tier; public string revision; }

@@ -27,6 +27,7 @@ public class ProposedRevealCoordinator : MonoBehaviour
     private string observedPrepare, expiredPrepare, sentPrepare, sentCommit;
     private float preparationStarted, nextAttempt;
     public bool HasRevealed => revealed != null;
+    public bool CanDisplayReveal => experimentManager != null && experimentManager.CanRunExperiment;
     public string RevealId => revealed != null ? revealed.id : null;
     public bool IsAnswerLocked => HasRevealed || prepared != null;
     // Return a copy so presentation cannot mutate the committed data.
@@ -35,7 +36,7 @@ public class ProposedRevealCoordinator : MonoBehaviour
     private NetSyncManager Network => participantRegistry != null ? participantRegistry.Network : null;
     private bool Ready => isActiveAndEnabled && experimentManager != null && candidateSync != null &&
         candidateSync.IsDataReady && sessionManager != null && !sessionManager.IsResettingSession &&
-        experimentManager.CurrentMode == ExperimentManager.ExperimentMode.Proposed;
+        experimentManager.CanRunExperiment && experimentManager.CurrentMode == ExperimentManager.ExperimentMode.Proposed;
 
     private void OnEnable()
     {
