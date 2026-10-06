@@ -36,7 +36,8 @@ public class FinalAgreementManager : MonoBehaviour
     public bool IsLocalParticipant => participantRegistry != null && participantRegistry.IsLocalParticipant;
     public bool IsLocalReady => IsAgreementPhase && network != null && network.IsReady && IsParticipantReady(network.ClientNo);
     public bool IsLocalInteractionLocked => IsAgreementPhase && (IsBoardConfirmed || IsLocalReady || !string.IsNullOrEmpty(pendingReady));
-    public bool CanToggleReady => !SessionResetting && IsAgreementPhase && IsLocalParticipant && network != null && network.IsReady && !IsBoardConfirmed;
+    public bool CanToggleReady => !SessionResetting && IsAgreementPhase && IsLocalParticipant && network != null && network.IsReady && !IsBoardConfirmed &&
+        experimentManager.CurrentState != ExperimentManager.ExperimentState.Confirmed;
     public IReadOnlyList<int> Participants => participantRegistry != null ? participantRegistry.ParticipantClientNos : Array.Empty<int>();
     [Serializable] private class PlacementVersion { public string tier; public string revision; }
     [Serializable] public class FinalEntry { public string cardId; public string tier; public string revision; }
