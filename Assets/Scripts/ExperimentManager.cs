@@ -11,6 +11,7 @@ public class ExperimentManager : MonoBehaviour
    [SerializeField] private NetSyncManager netSyncManager;
     [SerializeField] private ExperimentSessionManager sessionManager;
     [SerializeField] private ExperimentLobbyController lobby;
+    [SerializeField] private ExperimentParticipantRegistry participantRegistry;
     public bool CanRunExperiment => lobby == null || lobby.IsExperimentStarted;
     public bool IsLobbyWaiting => lobby != null && lobby.IsLobbyVisible;
    [SerializeField] private bool canChangeMode = true;
@@ -51,6 +52,23 @@ public class ExperimentManager : MonoBehaviour
    public ExperimentMode CurrentMode => currentMode;
    public ExperimentState CurrentState => currentState;
    public string CurrentCardId => currentCardId;
+
+   public string ModeChangeBlockReason
+   {
+       get
+       {
+           if (sessionManager != null && sessionManager.IsResettingSession) return "Session Reset in progress";
+           if (participantRegistry == null || !participantRegistry.IsLocalExperimenter) return "Local Role must be Experimenter";
+           if (lobby == null) return "Lobby / Setup context is unavailable";
+           if (lobby.HasStartRequestedOrStarted) return "Experiment already started or Start pending";
+           if (!lobby.IsLobbyVisible || currentState != ExperimentState.Idle) return "Not in Lobby / Setup";
+           if (!canChangeMode || !isActiveAndEnabled) return "Mode control is disabled";
+           if (subscribedManager == null || !subscribedManager.IsReady) return "NetSync is not ready";
+           if (!RoomClientsAreIdle()) return "Peer state is not Idle or not synchronized";
+           return "";
+       }
+   }
+   public bool CanChangeMode => ModeChangeBlockReason == "";
 
    private void Start()
    {
@@ -183,11 +201,12 @@ public class ExperimentManager : MonoBehaviour
            Debug.LogWarning($"[ExperimentManager] Invalid Room Mode: {value}", this);
            return;
        }
-       if (currentState != ExperimentState.Idle && mode != currentMode)
+       if ((lobby != null && lobby.StartedMode.HasValue && mode != lobby.StartedMode.Value) ||
+           (currentState != ExperimentState.Idle && mode != currentMode))
        {
            // No rollback write: competing clients could otherwise create a loop.
-           // Resume from the Room value on returning to Idle.
-           Debug.LogWarning($"[ExperimentManager] 実験中のRoom Mode変更を拒否: {currentMode} -> {mode}. Idleに戻ると再取得します", this);
+           // Only a new Session may unlock Mode after an experiment has started.
+           Debug.LogWarning($"[Mode Change Rejected] Active experiment Room Mode: {currentMode} -> {mode}", this);
            return;
        }
        if (restoring) Debug.Log($"[Experiment Mode Restore] {mode}");
@@ -200,25 +219,12 @@ public class ExperimentManager : MonoBehaviour
 
    public void SetMode(ExperimentMode mode)
    {
-        if (sessionManager != null && sessionManager.IsResettingSession) return;
-        if (currentState != ExperimentState.Idle)
-        {
-            Debug.LogWarning(
-                "[ExperimentManager] 実験中は方式を変更できません"
-            );
-            return;
-        }
-
-        if (!canChangeMode || !isActiveAndEnabled || !Enum.IsDefined(typeof(ExperimentMode), mode)) return;
         Subscribe();
-        if (subscribedManager == null || !subscribedManager.IsReady)
+        string reason = ModeChangeBlockReason;
+        if (!Enum.IsDefined(typeof(ExperimentMode), mode)) reason = "Invalid Mode";
+        if (!string.IsNullOrEmpty(reason))
         {
-            Debug.LogWarning("[ExperimentManager] NetSync準備前は方式を変更できません", this);
-            return;
-        }
-        if (!RoomClientsAreIdle())
-        {
-            Debug.LogWarning("[ExperimentManager] 接続中の参加者がIdleではない、または状態未取得のため方式変更を拒否しました", this);
+            Debug.LogWarning("[Mode Change Rejected] " + reason, this);
             return;
         }
         if (SessionVariableTransport.GetGlobalVariable(subscribedManager, sessionManager, ModeVariable) == mode.ToString()) return;

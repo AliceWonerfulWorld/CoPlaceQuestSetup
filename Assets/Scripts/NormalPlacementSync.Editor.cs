@@ -9,7 +9,7 @@ public partial class NormalPlacementSync
 
     private void HandleEditorTestInput()
     {
-        if (!Application.isPlaying || !isActiveAndEnabled || !CanLocalEditSharedBoard) return;
+        if (!Application.isPlaying || !isActiveAndEnabled || participantRegistry == null || !participantRegistry.CanUseEditorParticipantInput || !CanLocalEditSharedBoard) return;
         var keyboard = Keyboard.current;
         if (keyboard == null) return;
 
@@ -34,7 +34,7 @@ public partial class NormalPlacementSync
 
     private bool TryPlaceEditorTestCard(string cardId, string tierId)
     {
-        if (!isActiveAndEnabled || !CanLocalEditSharedBoard || subscribedManager == null || !subscribedManager.IsReady)
+        if (!isActiveAndEnabled || participantRegistry == null || !participantRegistry.CanUseEditorParticipantInput || !CanLocalEditSharedBoard || subscribedManager == null || !subscribedManager.IsReady)
             return false;
         if (!cardsById.TryGetValue(cardId, out var card) || card == null ||
             !zonesByTier.TryGetValue(tierId, out var zone) || zone == null)

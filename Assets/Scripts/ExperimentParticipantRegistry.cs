@@ -10,7 +10,8 @@ public class ExperimentParticipantRegistry : MonoBehaviour
     public const string RoleVariable = "experimentRole";
     public const string ExpectedCountVariable = "experimentExpectedParticipantCount";
     [SerializeField] private NetSyncManager netSyncManager;
-    [SerializeField, Tooltip("Auto: Editor = Experimenter, Player/Quest = Participant. Use Participant for Editor participant tests.")]
+    [Header("Production Role / Development Override")]
+    [SerializeField, Tooltip("Production default: AutoByPlatform (Editor = Experimenter, Player/Quest = Participant). Explicit Participant/Experimenter values are development overrides; restore Auto before production builds.")]
     private ClientRole localRole = ClientRole.AutoByPlatform;
     [SerializeField, Min(1)] private int expectedParticipantCount = 2;
 
@@ -43,10 +44,28 @@ public class ExperimentParticipantRegistry : MonoBehaviour
     public NetSyncManager Network => netSyncManager != null ? netSyncManager : NetSyncManager.Instance;
     public bool IsLocalParticipant => EffectiveRole == ClientRole.Participant;
     public bool IsLocalExperimenter => EffectiveRole == ClientRole.Experimenter;
-    private ClientRole EffectiveRole => localRole == ClientRole.AutoByPlatform
+    public bool IsRoleOverridden => localRole != ClientRole.AutoByPlatform;
+    public bool CanUseEditorParticipantInput => Application.isEditor && localRole == ClientRole.Participant;
+    public ClientRole EffectiveRole => localRole == ClientRole.AutoByPlatform
         ? (Application.isEditor ? ClientRole.Experimenter : ClientRole.Participant) : localRole;
 
-    private void Start() { Subscribe(); }
+    private ClientRole? lastReportedRole;
+    private void ReportRole()
+    {
+        if (lastReportedRole == localRole) return;
+        lastReportedRole = localRole;
+        if (IsRoleOverridden) Debug.LogWarning($"[Development Role Override] {localRole} / Effective: {EffectiveRole}. Production default is AutoByPlatform.", this);
+        else Debug.Log($"[Production Auto Role] {EffectiveRole}", this);
+    }
+    // Shared answering permission; phase-specific guards remain with each controller.
+    public bool CanOperateInSession(ExperimentSessionManager session)
+    {
+        var net = Network;
+        return IsLocalParticipant && net != null && net.IsReady && net.ClientNo > 0 &&
+            IsRegisteredParticipant(net.ClientNo) && session != null && !session.IsResettingSession &&
+            !string.IsNullOrEmpty(session.CurrentSessionId) && !string.IsNullOrEmpty(session.SessionStartedAtUtc);
+    }
+    private void Start() { ReportRole(); Subscribe(); }
     private void OnEnable() { Subscribe(); }
     private void OnDisable()
     {
@@ -97,6 +116,7 @@ public class ExperimentParticipantRegistry : MonoBehaviour
 
     private void Update()
     {
+        ReportRole();
         Subscribe();
         if (subscribedManager == null || !subscribedManager.IsReady) { publishedRole = publishedExpectedCount = null; return; }
         PublishRole();

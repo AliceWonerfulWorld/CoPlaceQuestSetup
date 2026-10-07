@@ -30,8 +30,7 @@ public partial class NormalPlacementSync : MonoBehaviour
     public string SharedAgreementId => proposedSharedPlacement != null ? proposedSharedPlacement.AgreementId : null;
     public bool CanLocalEditSharedBoard => IsSharedPlacementPhase && !IsResettingSession &&
         experimentManager.CurrentState != ExperimentManager.ExperimentState.Confirmed &&
-        (IsNormalMode || (participantRegistry != null && participantRegistry.IsLocalParticipant &&
-        subscribedManager != null && participantRegistry.IsRegisteredParticipant(subscribedManager.ClientNo)));
+        participantRegistry != null && participantRegistry.CanOperateInSession(sessionManager);
 
     private void Awake()
     {

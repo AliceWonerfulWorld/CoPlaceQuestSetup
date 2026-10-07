@@ -10,7 +10,7 @@ using UnityEngine;
 public static class ExperimentLobbySetup
 {
     private static readonly Color Accent = new Color(0.38f, 0.85f, 0.80f);
-    public const string Glyphs = "CoPlace 共同VR空間における画像分類実験現在方式接続済接続待ち参加者が揃いました参加者を待っています実験者の開始をお待ちください開始の準備ができました接続を待っていますSession Resetを処理しています実験は開始済みです開始を同期していますNew Sessionを実行してくださいParticipantが揃うまでお待ちくださいNew Sessionで開始前の状態に戻してください方式の同期を待っていますParticipantの準備を待っています未作成現在状態実験を開始個別回答比較共同分類実験の準備方式を選択・●○→ / 0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-";
+    public const string Glyphs = "参加者が不足しています数を確認してください準備完了登録同期Role CoPlace 共同VR空間における画像分類実験現在方式接続済接続待ち参加者が揃いました参加者を待っています実験者の開始をお待ちください開始の準備ができました接続を待っていますSession Resetを処理しています実験は開始済みです開始を同期していますNew Sessionを実行してくださいParticipantが揃うまでお待ちくださいNew Sessionで開始前の状態に戻してください方式の同期を待っていますParticipantの準備を待っています未作成現在状態実験を開始個別回答比較共同分類実験の準備方式を選択・●○→ / 0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-";
     [MenuItem("Tools/Experiment/Add Experiment Lobby")]
     public static void Run()
     {
@@ -28,7 +28,7 @@ public static class ExperimentLobbySetup
         root.transform.position = new Vector3(-0.07f, 1.65f, -1.5f);
         var lobby = root.AddComponent<ExperimentLobbyController>(); var ui = root.AddComponent<ExperimentLobbyUI>();
         Set(lobby, "experimentManager", manager); Set(lobby, "participantRegistry", registry); Set(lobby, "sessionManager", session);
-        Set(manager, "lobby", lobby); Set(ui, "lobby", lobby); Set(ui, "experimentManager", manager);
+        Set(manager, "lobby", lobby); Set(manager, "participantRegistry", registry); Set(ui, "lobby", lobby); Set(ui, "experimentManager", manager);
         var content = Rect("LobbyContent", root.transform, Vector2.zero, new Vector2(3000, 1500));
         content.localScale = Vector3.one * 0.001f;
         var canvas = content.gameObject.AddComponent<Canvas>(); canvas.renderMode = RenderMode.WorldSpace; canvas.sortingOrder = 20;

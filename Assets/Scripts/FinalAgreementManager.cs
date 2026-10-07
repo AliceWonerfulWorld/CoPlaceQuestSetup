@@ -36,7 +36,7 @@ public class FinalAgreementManager : MonoBehaviour
     public bool IsLocalParticipant => participantRegistry != null && participantRegistry.IsLocalParticipant;
     public bool IsLocalReady => IsAgreementPhase && network != null && network.IsReady && IsParticipantReady(network.ClientNo);
     public bool IsLocalInteractionLocked => IsAgreementPhase && (IsBoardConfirmed || IsLocalReady || !string.IsNullOrEmpty(pendingReady));
-    public bool CanToggleReady => !SessionResetting && IsAgreementPhase && IsLocalParticipant && network != null && network.IsReady && !IsBoardConfirmed &&
+    public bool CanToggleReady => !SessionResetting && IsAgreementPhase && participantRegistry != null && participantRegistry.CanOperateInSession(sessionManager) && network != null && network.IsReady && !IsBoardConfirmed &&
         experimentManager.CurrentState != ExperimentManager.ExperimentState.Confirmed;
     public IReadOnlyList<int> Participants => participantRegistry != null ? participantRegistry.ParticipantClientNos : Array.Empty<int>();
     [Serializable] private class PlacementVersion { public string tier; public string revision; }
@@ -193,7 +193,7 @@ public class FinalAgreementManager : MonoBehaviour
     }
     public bool PreparePlacementChange(string cardId, string tier)
     {
-        if (SessionResetting || !IsAgreementPhase || network == null || !network.IsReady || IsLocalInteractionLocked) return false;
+        if (SessionResetting || !IsAgreementPhase || participantRegistry == null || !participantRegistry.CanOperateInSession(sessionManager) || network == null || !network.IsReady || IsLocalInteractionLocked) return false;
         string existing = SessionVariableTransport.GetGlobalVariable(network, sessionManager, "normalPlacement_" + cardId);
         var version = ReadVersion(cardId);
         if (existing == tier && version != null && version.tier == tier) return true;

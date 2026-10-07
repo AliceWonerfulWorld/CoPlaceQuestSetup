@@ -48,6 +48,17 @@ public static class ExperimentResultVerification
             ExperimentResultUI Result(ProposedRevealVerification.Endpoint e) => e.components.OfType<ExperimentResultUI>().Single();
             CardTierDetector[] Main(ProposedRevealVerification.Endpoint e) => e.components.OfType<CardTierDetector>().OrderBy(c => c.name).ToArray();
             Tick(3);
+            Set(exp.registry, "localRole", ExperimentParticipantRegistry.ClientRole.AutoByPlatform); Call(exp.registry, "Update");
+            Check(exp.registry.IsLocalExperimenter && !exp.registry.IsRoleOverridden && !exp.registry.CanUseEditorParticipantInput,
+                "Production Auto Role resolves Editor to Experimenter; keyboard answering disabled");
+            Check(a.registry.IsLocalParticipant && a.registry.IsRoleOverridden && a.registry.CanUseEditorParticipantInput,
+                "Explicit Editor Participant override retains development keyboard input");
+            Check(!a.registry.CanOperateInSession(a.session) && !a.placements.CanLocalEditSharedBoard,
+                "Participant cannot answer before Session activation");
+            string unchangedMode = exp.net.GetGlobalVariable("experimentMode");
+            a.manager.SetMode(ExperimentManager.ExperimentMode.Normal); Deliver(a); Tick();
+            Check(exp.net.GetGlobalVariable("experimentMode") == unchangedMode && !a.manager.CanChangeMode,
+                "Participant direct SetMode cannot bypass Lobby permissions");
             Set(exp.registry, "expectedParticipantCount", 3); Tick(2);
             Check(group.All(e => e.registry.ExpectedParticipantCount == 3) &&
                 ((TMP_Text)Get(UI(a), "participants")).text.Contains("2 / 3 Connected"),
@@ -77,7 +88,7 @@ public static class ExperimentResultVerification
             Check(group.All(e => !e.session.IsResettingSession && e.session.SessionEpoch == 1 && e.lobby.IsLobbyVisible), "New Session completes existing Reset ACK while keeping every client in Lobby");
             Check(exp.lobby.CanStart && !a.lobby.CanStart && !b.lobby.CanStart, "Only Experimenter can Start when Session and cohort are ready");
             exp.Peer(2, ExperimentParticipantRegistry.RoleVariable, "Experimenter"); exp.registry.RefreshParticipants(); Call(UI(exp), "Update");
-            Check(exp.lobby.ConnectedParticipants == 1 && !exp.lobby.CanStart && !((UnityEngine.UI.Button)Get(UI(exp), "startButton")).interactable,
+            Check(exp.lobby.ConnectedParticipants == 1 && !exp.lobby.CanStart && exp.lobby.StartBlockReason.Contains("1 / 2") && !exp.lobby.StartExperiment() && !((UnityEngine.UI.Button)Get(UI(exp), "startButton")).interactable,
                 "Missing Participant disables Start button");
             exp.Peer(2, ExperimentParticipantRegistry.RoleVariable, "Participant"); exp.registry.RefreshParticipants(); Tick();
             foreach (var e in group)
@@ -91,7 +102,36 @@ public static class ExperimentResultVerification
             Check(a.placements.IsSharedPlacementPhase && b.placements.IsSharedPlacementPhase && Main(a).All(c => c.GetComponent<Renderer>().enabled) &&
                 group.All(e => !e.privateBoard.IsVisible && e.view.DisplayedParticipantCount == 0), "Normal Start restores Main and keeps Private/Reveal hidden");
             Check(a.placements.SendPlacement("Card_03", "A") && a.placements.SendPlacement("Card_01", "B") && a.placements.SendPlacement("Card_02", "D"), "Normal placement works in arbitrary order after Lobby Start");
-            Deliver(a); Tick(2); Check(Main(b).Select(c => c.CurrentTier).SequenceEqual(new[] { "B", "D", "A" }), "Normal placements synchronize across Participant endpoints after Start");
+            Deliver(a); Tick(2);
+            Check(Main(exp).Select(c => c.CurrentTier).SequenceEqual(new[] { "B", "D", "A" }),
+                "Experimenter receives and displays Participant Main placements");
+            bool participantMove = (bool)a.placements.GetType().GetMethod("TryPlaceEditorTestCard", Flags).Invoke(a.placements, new object[] { "Card_01", "B" });
+            Check(participantMove, "Explicit Editor Participant override retains Normal keyboard placement");
+            Check(!exp.agreement.PreparePlacementChange("Card_01", "D"), "Experimenter cannot write placement revisions through agreement API");
+            Check(!exp.placements.CanLocalEditSharedBoard && !exp.placements.SendPlacement("Card_01", "D") &&
+                Main(exp).All(c => !c.Process(null, null)), "Normal Experimenter cannot send placement or XR Grab");
+            bool editorMove = (bool)exp.placements.GetType().GetMethod("TryPlaceEditorTestCard", Flags).Invoke(exp.placements, new object[] { "Card_01", "D" });
+            Check(!editorMove && Main(exp)[0].CurrentTier == "B", "Normal Experimenter keyboard placement entry is rejected without local movement");
+            exp.agreement.ToggleLocalReady();
+            Check(!exp.agreement.CanToggleReady && !exp.agreement.IsLocalReady, "Experimenter cannot Ready on behalf of Participants");
+            string lockedMode = exp.net.GetGlobalVariable("experimentMode");
+            foreach (ExperimentManager.ExperimentState state in Enum.GetValues(typeof(ExperimentManager.ExperimentState)))
+            {
+                Set(exp.manager, "currentState", state);
+                exp.manager.SetMode(ExperimentManager.ExperimentMode.Proposed);
+                a.manager.SetMode(ExperimentManager.ExperimentMode.Proposed);
+                Check(!exp.manager.CanChangeMode && exp.net.GetGlobalVariable("experimentMode") == lockedMode,
+                    "Central Mode guard rejects direct calls after Start even at " + state);
+            }
+            Set(exp.manager, "currentState", ExperimentManager.ExperimentState.Idle);
+            foreach (var e in group) Call(e.components.OfType<ExperimentModeUI>().Single(), "Update");
+            Check(group.All(e => !e.components.OfType<ExperimentModeUI>().Single().GetComponent<Canvas>().enabled),
+                "Legacy Mode UI stays hidden for all roles after Start");
+            exp.Global("experimentMode", "Proposed"); Deliver(exp); Tick();
+            Check(group.All(e => e.manager.CurrentMode == ExperimentManager.ExperimentMode.Normal),
+                "Received conflicting Room Mode cannot switch an active Idle Normal trial");
+            exp.Global("experimentMode", lockedMode); Deliver(exp); Tick();
+            Check(Main(b).Select(c => c.CurrentTier).SequenceEqual(new[] { "B", "D", "A" }), "Normal placements synchronize across Participant endpoints after Start");
             a.agreement.ToggleLocalReady(); Deliver(a); b.agreement.ToggleLocalReady(); Deliver(b); Tick(4);
             Check(group.All(e => e.agreement.IsBoardConfirmed), "Normal Final Agreement still confirms the shared Board");
             Check(group.All(e => Result(e).IsVisible && !e.agreement.CanToggleReady && !e.placements.CanLocalEditSharedBoard &&
@@ -109,6 +149,9 @@ public static class ExperimentResultVerification
             Check(b.lobby.IsExperimentStarted && b.manager.CurrentState == ExperimentManager.ExperimentState.Confirmed, "Same Session reconnect restores Start without resetting confirmed flow");
             Result(exp).NewSessionFromUI();
             Check(!Result(exp).IsVisible, "Manual Result New Session hides Result immediately");
+            exp.manager.SetMode(ExperimentManager.ExperimentMode.Proposed);
+            Check(!exp.manager.CanChangeMode && group.All(e => !e.placements.CanLocalEditSharedBoard),
+                "Session Reset blocks Mode changes and Participant placement");
             Deliver(exp); Tick(12);
             Check(group.All(e => e.lobby.IsLobbyVisible && !e.agreement.IsBoardConfirmed && !e.submission.IsLocalSubmitted && e.manager.CurrentState == ExperimentManager.ExperimentState.Idle),
                 "Reset returns to Lobby and clears Ready/Confirmed/Submit/State");
@@ -116,14 +159,23 @@ public static class ExperimentResultVerification
             exp.lobby.SelectProposed(); Deliver(exp); Tick(2);
             Check(group.All(e => e.manager.CurrentMode == ExperimentManager.ExperimentMode.Proposed &&
                 ((TMP_Text)Get(UI(e), "modeDescription")).text == ExperimentLobbyUI.ProposedDescription), "Proposed mode updates Japanese introduction on every endpoint");
+            Check(exp.manager.CanChangeMode && exp.lobby.CanChangeMode, "New Session re-enables Experimenter Mode selection in Lobby");
             Check(exp.lobby.StartExperiment(), "Experimenter can Start Proposed from valid current Session"); Deliver(exp); Tick(3);
             Check(a.privateBoard.IsVisible && a.privateBoard.CanInteract && b.privateBoard.CanInteract && !exp.privateBoard.IsVisible &&
                 group.All(e => Main(e).All(c => !c.GetComponent<Renderer>().enabled)), "Proposed Start enables only Participant Private boards and keeps Main hidden");
+            Check(!exp.privateBoard.TryPlaceCard("Card_01", "A") && !exp.answers.TrySetCandidate("Card_01", "A", out _) &&
+                !exp.privateBoard.CanInteract, "Proposed Experimenter cannot answer through Private UI or candidate API");
+            exp.manager.SetMode(ExperimentManager.ExperimentMode.Normal);
+            Check(exp.manager.CurrentMode == ExperimentManager.ExperimentMode.Proposed && !exp.manager.CanChangeMode,
+                "Proposed Private phase rejects direct Mode change");
             foreach (var e in new[] { a, b }) for (int c = 0; c < 3; c++) e.privateBoard.TryPlaceCard("Card_0" + (c + 1), e == a ? new[] { "A", "B", "C" }[c] : new[] { "D", "B", "A" }[c]);
             Tick(3); Check(group.All(e => !e.reveal.HasRevealed), "Proposed retains explicit Submit requirement after Lobby");
             Check(a.submission.TrySubmit() && b.submission.TrySubmit(), "Participants submit Private answers after Start"); Tick(12);
             Check(group.All(e => e.reveal.HasRevealed && e.shared.IsActive && e.view.DisplayedParticipantCount == 2 && !e.lobby.IsLobbyVisible),
                 "Proposed Submit / ACK Reveal / readonly references / Main shared phase all work after Lobby");
+            Check(!exp.placements.CanLocalEditSharedBoard && !exp.placements.SendPlacement("Card_01", "A") &&
+                Main(exp).All(c => !c.Process(null, null)) && !exp.agreement.CanToggleReady,
+                "Proposed shared phase uses the same Experimenter readonly permissions");
             Check(b.placements.SendPlacement("Card_03", "C") && b.placements.SendPlacement("Card_01", "D") && b.placements.SendPlacement("Card_02", "A"), "Proposed Main accepts shared final placements");
             Deliver(b); Tick(2); Check(Main(a).Select(c => c.CurrentTier).SequenceEqual(new[] { "D", "A", "C" }), "Proposed Main placements synchronize after Reveal");
             a.agreement.ToggleLocalReady(); Deliver(a); b.agreement.ToggleLocalReady(); Deliver(b); Tick(4);

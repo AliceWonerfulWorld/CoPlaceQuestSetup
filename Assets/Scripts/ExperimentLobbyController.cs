@@ -26,21 +26,44 @@ public class ExperimentLobbyController : MonoBehaviour
     public string CurrentState => experimentManager != null ? experimentManager.CurrentState.ToString() : "—";
     private NetSyncManager Network => participantRegistry != null ? participantRegistry.Network : null;
     public bool CanNewSession => IsExperimenter && IsConnected && !IsResetting && sessionManager != null;
-    public bool CanChangeMode => CanNewSession && IsLobbyVisible && pending == null && experimentManager != null &&
-        experimentManager.CurrentState == ExperimentManager.ExperimentState.Idle;
+    public bool CanChangeMode => experimentManager != null && experimentManager.CanChangeMode;
+    // Also reads the retained marker: Mode must lock before the next Update and on reconnect.
+    public bool HasStartRequestedOrStarted => pending != null || IsExperimentStarted || ReadStartRecord() != null;
+    public ExperimentManager.ExperimentMode? StartedMode
+    {
+        get
+        {
+            var record = pending ?? ReadStartRecord() ?? (IsExperimentStarted ? started : null);
+            if (record == null) return null;
+            return record.mode == "Normal" ? ExperimentManager.ExperimentMode.Normal : ExperimentManager.ExperimentMode.Proposed;
+        }
+    }
+    private StartRecord ReadStartRecord()
+    {
+        if (!IsConnected || IsResetting || sessionManager == null || string.IsNullOrEmpty(SessionId)) return null;
+        StartRecord record;
+        try { record = JsonUtility.FromJson<StartRecord>(SessionVariableTransport.GetGlobalVariable(Network, sessionManager, StartVariable)); }
+        catch { return null; }
+        return record != null && !string.IsNullOrEmpty(record.id) && record.sessionId == SessionId &&
+            record.epoch == sessionManager.SessionEpoch && record.owner > 0 &&
+            (record.mode == "Normal" || record.mode == "Proposed") ? record : null;
+    }
     public string StartBlockReason
     {
         get
         {
             if (!IsExperimenter) return "実験者の開始をお待ちください";
             if (!IsConnected) return "接続を待っています";
+            if (Network.GetClientVariable(ExperimentParticipantRegistry.RoleVariable, Network.ClientNo) != "Experimenter") return "実験者のRole登録同期を待っています";
             if (IsResetting) return "Session Resetを処理しています";
             if (IsExperimentStarted) return "実験は開始済みです";
             if (pending != null) return "開始を同期しています";
-            if (sessionManager == null || string.IsNullOrEmpty(SessionId) || string.IsNullOrEmpty(sessionManager.SessionStartedAtUtc)) return "New Sessionを実行してください";
-            if (ConnectedParticipants != ExpectedParticipants || ExpectedParticipants == 0) return "Participantが揃うまでお待ちください";
+            if (sessionManager == null || string.IsNullOrEmpty(SessionId) || string.IsNullOrEmpty(sessionManager.SessionStartedAtUtc)) return "Sessionの準備が完了していません。New Sessionを実行してください";
+            if (ConnectedParticipants != ExpectedParticipants || ExpectedParticipants == 0) return ConnectedParticipants < ExpectedParticipants ? $"参加者が不足しています {ConnectedParticipants} / {ExpectedParticipants}" : $"参加者数を確認してください {ConnectedParticipants} / {ExpectedParticipants}";
             if (experimentManager == null || experimentManager.CurrentState != ExperimentManager.ExperimentState.Idle) return "New Sessionで開始前の状態に戻してください";
             if (SessionVariableTransport.GetGlobalVariable(Network, sessionManager, "experimentMode") != experimentManager.CurrentMode.ToString()) return "方式の同期を待っています";
+            foreach (int client in participantRegistry.ParticipantClientNos)
+                if (Network.GetClientVariable(ExperimentParticipantRegistry.RoleVariable, client) != "Participant") return "Participant登録の同期を待っています";
             foreach (int client in participantRegistry.ParticipantClientNos)
                 if (SessionVariableTransport.GetClientVariable(Network, sessionManager, "experimentState", client) != "Idle") return "Participantの準備を待っています";
             return "";
@@ -55,12 +78,8 @@ public class ExperimentLobbyController : MonoBehaviour
     {
         if (!IsConnected || IsResetting) return;
         if (started != null && (started.sessionId != SessionId || started.epoch != sessionManager.SessionEpoch)) ClearLocal();
-        StartRecord record;
-        try { record = JsonUtility.FromJson<StartRecord>(SessionVariableTransport.GetGlobalVariable(Network, sessionManager, StartVariable)); }
-        catch { record = null; }
-        if (record != null && !string.IsNullOrEmpty(record.id) && !string.IsNullOrEmpty(record.sessionId) &&
-            record.sessionId == SessionId && record.epoch == sessionManager.SessionEpoch && record.owner > 0 &&
-            (record.mode == "Normal" || record.mode == "Proposed"))
+        var record = ReadStartRecord();
+        if (record != null)
         {
             if (started == null) Debug.Log($"[Experiment Start Received] {record.mode} / Session {record.sessionId}", this);
             started = record; pending = null;
@@ -83,6 +102,6 @@ public class ExperimentLobbyController : MonoBehaviour
     }
     public void StartFromUI() => StartExperiment();
     public void NewSessionFromUI() { if (CanNewSession) sessionManager.StartNewSession(); }
-    public void SelectNormal() { if (CanChangeMode) experimentManager.SetMode(ExperimentManager.ExperimentMode.Normal); }
-    public void SelectProposed() { if (CanChangeMode) experimentManager.SetMode(ExperimentManager.ExperimentMode.Proposed); }
+    public void SelectNormal() { if (experimentManager != null) experimentManager.SetMode(ExperimentManager.ExperimentMode.Normal); }
+    public void SelectProposed() { if (experimentManager != null) experimentManager.SetMode(ExperimentManager.ExperimentMode.Proposed); }
 }

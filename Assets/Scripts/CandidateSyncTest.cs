@@ -136,7 +136,7 @@ public class CandidateSyncTest : MonoBehaviour
         if (revealCoordinator != null && revealCoordinator.IsAnswerLocked) return false;
         if (independentSubmission != null && independentSubmission.IsLocalLocked) return false;
         Subscribe();
-        if (Network == null || !Network.IsReady || participantRegistry == null || !participantRegistry.IsLocalParticipant)
+        if (Network == null || !Network.IsReady || participantRegistry == null || !participantRegistry.CanOperateInSession(sessionManager))
         {
             Debug.LogWarning("[Candidate] ReadyなParticipantのみ回答できます", this);
             return false;

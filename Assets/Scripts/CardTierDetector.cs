@@ -5,8 +5,7 @@ using UnityEngine.XR.Interaction.Toolkit.Interactables;
 public class CardTierDetector : MonoBehaviour, UnityEngine.XR.Interaction.Toolkit.Filtering.IXRSelectFilter
 {
     public bool canProcess => isActiveAndEnabled;
-    private bool CanEditSharedBoard => normalPlacementSync != null ? normalPlacementSync.CanLocalEditSharedBoard :
-        experimentManager != null && experimentManager.CurrentMode == ExperimentManager.ExperimentMode.Normal;
+    private bool CanEditSharedBoard => normalPlacementSync != null && normalPlacementSync.CanLocalEditSharedBoard;
     public bool Process(UnityEngine.XR.Interaction.Toolkit.Interactors.IXRSelectInteractor interactor,
         UnityEngine.XR.Interaction.Toolkit.Interactables.IXRSelectInteractable interactable)
         => CanEditSharedBoard &&

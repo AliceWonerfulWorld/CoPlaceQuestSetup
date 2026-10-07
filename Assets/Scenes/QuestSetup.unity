@@ -12857,7 +12857,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5729049226429455924, guid: e143c37e2b0944c278fd43733d72fa3b, type: 3}
       propertyPath: _serverAddress
-      value: 172.22.26.4
+      value: 192.168.1.211
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -31732,6 +31732,7 @@ MonoBehaviour:
   netSyncManager: {fileID: 496949780}
   sessionManager: {fileID: 2006167394}
   lobby: {fileID: 433941724}
+  participantRegistry: {fileID: 2006167393}
   canChangeMode: 1
   currentMode: 1
   currentState: 0
@@ -31764,7 +31765,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ExperimentParticipantRegistry
   netSyncManager: {fileID: 496949780}
-  localRole: 1
+  localRole: 0
   expectedParticipantCount: 2
 --- !u!114 &2006167394
 MonoBehaviour:

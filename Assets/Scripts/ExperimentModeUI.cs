@@ -7,8 +7,8 @@ public class ExperimentModeUI : MonoBehaviour
     [SerializeField] private TMP_Text modeText;
     [SerializeField] private ExperimentParticipantRegistry participantRegistry;
     [SerializeField] private Canvas canvas;
-    private void Update() { if (canvas != null) canvas.enabled = experimentManager != null && experimentManager.CanRunExperiment &&
-        (participantRegistry == null || participantRegistry.IsLocalExperimenter); }
+    // Lobby now owns Mode controls; the legacy canvas stays hidden in the production flow.
+    private void Update() { if (canvas != null) canvas.enabled = false; }
 
     private void OnEnable()
     {
@@ -38,7 +38,6 @@ public class ExperimentModeUI : MonoBehaviour
 
     private void SetMode(ExperimentManager.ExperimentMode mode)
     {
-        if ((participantRegistry != null && !participantRegistry.IsLocalExperimenter) || (experimentManager != null && !experimentManager.CanRunExperiment)) return;
         if (experimentManager == null)
         {
             Debug.LogWarning("[ExperimentModeUI] ExperimentManager is not assigned.", this);

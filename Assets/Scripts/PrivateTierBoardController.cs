@@ -38,7 +38,7 @@ public class PrivateTierBoardController : MonoBehaviour
         (revealCoordinator == null || !revealCoordinator.HasRevealed);
     private bool IsResetting => sessionManager != null && sessionManager.IsResettingSession;
     public bool CanInteract => isActiveAndEnabled && IsVisible && candidateSync != null && candidateSync.IsDataReady &&
-        candidateSync.IsIndependentAnswerPhase && participantRegistry.IsRegisteredParticipant(candidateSync.LocalClientNo) &&
+        candidateSync.IsIndependentAnswerPhase && participantRegistry.CanOperateInSession(sessionManager) &&
         (revealCoordinator == null || !revealCoordinator.IsAnswerLocked) &&
         (independentSubmission == null || !independentSubmission.IsLocalLocked);
 
@@ -177,7 +177,7 @@ public class PrivateTierBoardController : MonoBehaviour
 #if UNITY_EDITOR
     private void HandleEditorInput()
     {
-        if (!Application.isPlaying || !CanInteract) return;
+        if (!Application.isPlaying || !CanInteract || !participantRegistry.CanUseEditorParticipantInput) return;
         var keyboard = Keyboard.current; if (keyboard == null) return;
         if (keyboard.f6Key.wasPressedThisFrame || keyboard.qKey.wasPressedThisFrame) selectedCardId = "Card_01";
         else if (keyboard.f7Key.wasPressedThisFrame || keyboard.wKey.wasPressedThisFrame) selectedCardId = "Card_02";
