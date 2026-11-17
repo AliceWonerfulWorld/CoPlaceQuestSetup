@@ -202,7 +202,7 @@ public class ProposedRevealCoordinator : MonoBehaviour
             var seen = new HashSet<string>();
             foreach (var a in participant.answers)
                 if (a == null || !a.answered || !cards.Contains(a.cardId) || !seen.Add(a.cardId) || string.IsNullOrEmpty(a.selectedAt) ||
-                    (a.tier != "A" && a.tier != "B" && a.tier != "C" && a.tier != "D")) return null;
+                    (a.tier != "A" && a.tier != "B" && a.tier != "C" && a.tier != "D" && a.tier != "E")) return null;
         }
         return s.owner == s.participants[0].clientNo ? s : null;
     }

@@ -15,7 +15,9 @@ public static class ExperimentResultVerification
     const BindingFlags Flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
     [Serializable] private class Report { public bool passed; public string[] checks; public string failure; }
     [MenuItem("Tools/Experiment/Verify Result Waiting Flows")]
-    public static void Run()
+    public static void Run() => RunCore(null);
+    public static void RunWithLogs(string logRoot) => RunCore(logRoot);
+    private static void RunCore(string logRoot)
     {
         var r = new Report(); var checks = new List<string>(); var endpoints = new List<ProposedRevealVerification.Endpoint>();
         void Check(bool ok, string name) { if (!ok) throw new Exception(name); checks.Add(name); }
@@ -27,6 +29,12 @@ public static class ExperimentResultVerification
             var group = endpoints.ToArray();
             Set(exp.registry, "localRole", ExperimentParticipantRegistry.ClientRole.Experimenter); Call(exp.registry, "Update");
             foreach (var e in group) Set(e.manager, "lobby", e.lobby);
+            if (logRoot != null) foreach (var e in group)
+            {
+                var logger = e.components.OfType<ExperimentLogger>().Single();
+                Set(logger, "outputRootOverride", Path.Combine(logRoot, "client-" + e.net.ClientNo));
+                Call(logger, "OnEnable"); Call(logger, "Start");
+            }
             void Deliver(ProposedRevealVerification.Endpoint from) { foreach (var to in group) if (from != to) ProposedRevealVerification.Deliver(from, to); }
             foreach (var e in group) Deliver(e);
             void Tick(int count = 1)
@@ -198,7 +206,11 @@ public static class ExperimentResultVerification
         catch (Exception error) { r.failure = error.ToString(); Debug.LogException(error); }
         finally
         {
-            foreach (var e in endpoints) EditorSceneManager.ClosePreviewScene(e.scene);
+            foreach (var e in endpoints)
+            {
+                if (logRoot != null) foreach (var logger in e.components.OfType<ExperimentLogger>()) Call(logger, "OnDisable");
+                EditorSceneManager.ClosePreviewScene(e.scene);
+            }
             r.checks = checks.ToArray(); Directory.CreateDirectory("Library/ExperimentResultVerification");
             File.WriteAllText("Library/ExperimentResultVerification/result.json", JsonUtility.ToJson(r, true));
             Debug.Log($"[Result Verification] {(r.passed ? "PASS" : "FAIL")} / {checks.Count}");

@@ -44,7 +44,7 @@ public class IndependentAnswerSubmission : MonoBehaviour
         foreach (string card in candidateSync.AnswerCardIds)
         {
             if (!candidateSync.TryGetParticipantAnswer(client, card, out var a) || !a.Answered ||
-                (a.Tier != "A" && a.Tier != "B" && a.Tier != "C" && a.Tier != "D") ||
+                (a.Tier != "A" && a.Tier != "B" && a.Tier != "C" && a.Tier != "D" && a.Tier != "E") ||
                 !DateTime.TryParseExact(a.SelectedAt, "o", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var time) ||
                 time.Kind != DateTimeKind.Utc || (client == Network.ClientNo && !candidateSync.MatchesLocalSubmission(card, a))) return null;
             data.Append(card).Append('|').Append(a.Tier).Append('|').Append(a.SelectedAt).Append('\n');

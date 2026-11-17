@@ -1,0 +1,17 @@
+﻿set,card_id,name_ja,file,type_for_balance_only
+A,A01,カラオケ,cards/Set_A/A01_karaoke.png,屋内・会話/歌
+A,A02,ボウリング,cards/Set_A/A02_bowling.png,運動・施設利用
+A,A03,ボードゲーム会,cards/Set_A/A03_boardgames.png,屋内・ゲーム
+A,A04,BBQ,cards/Set_A/A04_barbecue.png,屋外・飲食
+A,A05,チーム対抗クイズ大会,cards/Set_A/A05_team_quiz.png,屋内・共同課題
+A,A06,お花見,cards/Set_A/A06_hanami.png,屋外・交流
+A,A07,卓球大会,cards/Set_A/A07_table_tennis.png,運動・施設利用
+A,A08,キャンパス写真ラリー,cards/Set_A/A08_photo_rally.png,屋外・共同課題
+B,B01,ダーツ,cards/Set_B/B01_darts.png,屋内・ゲーム
+B,B02,映画鑑賞会,cards/Set_B/B02_movie_night.png,屋内・鑑賞
+B,B03,ゲーム交流会,cards/Set_B/B03_video_games.png,屋内・ゲーム
+B,B04,公園ピクニック,cards/Set_B/B04_picnic.png,屋外・飲食
+B,B05,料理交流会,cards/Set_B/B05_cooking.png,屋内・共同課題
+B,B06,カフェ交流会,cards/Set_B/B06_cafe.png,屋内・交流
+B,B07,バドミントン大会,cards/Set_B/B07_badminton.png,運動・施設利用
+B,B08,ものづくり体験会,cards/Set_B/B08_craft.png,屋内・共同課題

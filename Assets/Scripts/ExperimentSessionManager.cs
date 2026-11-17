@@ -16,15 +16,17 @@ public class ExperimentSessionManager : MonoBehaviour
     [SerializeField] private CandidateSyncTest candidateSync;
     [SerializeField] private FinalAgreementManager finalAgreement;
     [SerializeField] private FinalAgreementUI agreementUI;
+    [SerializeField] private PilotCardSetController cardSets;
     private NetSyncManager network;
     private readonly Queue<string> pendingControls = new Queue<string>();
     private string observedControl;
-    [Serializable] private class Control { public string id; public string startedAt; public string activatedAt; public string phase; public int owner; public string mode; public long epoch; }
+    [Serializable] private class Control { public string id; public string startedAt; public string activatedAt; public string phase; public int owner; public string mode; public string cardSetId; public long epoch; }
     private Control control;
     private readonly Dictionary<string, string> globalCache = new Dictionary<string, string>();
     private readonly Dictionary<string, string> clientCache = new Dictionary<string, string>();
     private readonly Dictionary<string, string> globalRepairs = new Dictionary<string, string>();
     private readonly Dictionary<string, string> clientRepairs = new Dictionary<string, string>();
+    public string CurrentCardSetId => control != null ? (string.IsNullOrEmpty(control.cardSetId) ? "Development" : control.cardSetId) : "Development";
     public long SessionEpoch => control != null ? control.epoch : 0;
     public string ReadGlobalValue(string name, string raw) => ReadValue(globalCache, name, raw);
     public string ReadClientValue(int client, string name, string raw) => ReadValue(clientCache, client + ":" + name, raw);
@@ -43,6 +45,7 @@ public class ExperimentSessionManager : MonoBehaviour
     private float nextAttempt, resetDeadline, nextAckRepair;
     public string CurrentSessionId => control != null ? control.id : "";
     public string SessionStartedAtUtc => control != null ? control.activatedAt ?? "" : "";
+    public bool HasResetControl => control != null && control.phase == "resetting";
     public string ResetStartedAtUtc => control != null ? control.startedAt : "";
     public ExperimentManager.ExperimentMode CurrentMode => experimentManager.CurrentMode;
     public ExperimentManager.ExperimentMode SessionMode => control != null && control.mode == "Normal" ? ExperimentManager.ExperimentMode.Normal : ExperimentManager.ExperimentMode.Proposed;
@@ -110,6 +113,7 @@ public class ExperimentSessionManager : MonoBehaviour
             controlRepairQueued = network.ClientNo == control.owner;
             return;
         }
+        if (control != null && next.id == control.id && next.cardSetId != control.cardSetId) return;
         control = next;
         controlRepairQueued = false;
         if (pendingSessionRequestId == next.id) pendingSessionRequestId = null;
@@ -120,8 +124,13 @@ public class ExperimentSessionManager : MonoBehaviour
             LastFailure = ""; ownerDefaultsQueued = localDefaultsQueued = completionQueued = false;
             nextAttempt = 0; resetDeadline = Time.unscaledTime + 30;
             Debug.Log($"[Session Reset Receive] Session: {next.id}");
-            OnSessionResetStarted?.Invoke(next.id);
-            try { ClearLocal(); BuildDefaults(); }
+            try
+            {
+                if (cardSets != null) cardSets.ApplySessionSet(CurrentCardSetId);
+                else if (CurrentCardSetId != "Development") throw new InvalidOperationException("Pilot card set assets are missing");
+                OnSessionResetStarted?.Invoke(next.id);
+                ClearLocal(); BuildDefaults();
+            }
             catch (Exception ex) { localResetFailed = true; Fail(ex.Message); return; }
             // Existing current-session answers survive a same-session reconnect.
             localDefaultsQueued = network.GetClientVariable(AckVariable) == next.id;
@@ -257,7 +266,7 @@ public class ExperimentSessionManager : MonoBehaviour
             foreach (int client in network.GetAliveClients(includeStealthClients: true))
                 if (network.GetClientVariable(AckVariable, client) != CurrentSessionId) { ReportTimeout(); return; }
             if (!network.SetGlobalVariable(IdVariable, CurrentSessionId)) { Fail("Session ID send failed"); return; }
-            var active = new Control { id = control.id, startedAt = control.startedAt, activatedAt = DateTime.UtcNow.ToString("o"), owner = control.owner, mode = control.mode, epoch = control.epoch, phase = "active" };
+            var active = new Control { id = control.id, startedAt = control.startedAt, activatedAt = DateTime.UtcNow.ToString("o"), owner = control.owner, mode = control.mode, cardSetId = control.cardSetId, epoch = control.epoch, phase = "active" };
             completionQueued = network.SetGlobalVariable(ControlVariable, JsonUtility.ToJson(active));
         }
         if (control.phase == "active") CompleteLocal();
@@ -290,7 +299,7 @@ public class ExperimentSessionManager : MonoBehaviour
         if (normalPlacementSync == null || finalAgreement == null || candidateSync == null || experimentManager == null) { Fail("Session component references are missing"); return false; }
         if (!normalPlacementSync.HasUnclassifiedZone) { Fail("Unclassified TierZone is missing"); return false; }
         Debug.Log($"[Session Reset Start] Previous Session: {CurrentSessionId}");
-        var next = new Control { id = Guid.NewGuid().ToString("N"), startedAt = DateTime.UtcNow.ToString("o"), phase = "resetting", owner = network.ClientNo, mode = experimentManager.CurrentMode.ToString(), epoch = SessionEpoch + 1 };
+        var next = new Control { id = Guid.NewGuid().ToString("N"), startedAt = DateTime.UtcNow.ToString("o"), phase = "resetting", owner = network.ClientNo, mode = experimentManager.CurrentMode.ToString(), cardSetId = cardSets != null ? cardSets.NextSessionSetId : "Development", epoch = SessionEpoch + 1 };
         // Local operations stop immediately while waiting for the Room echo.
         pendingSessionRequestId = next.id;
         resetDeadline = Time.unscaledTime + 30;

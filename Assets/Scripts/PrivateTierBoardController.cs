@@ -42,6 +42,14 @@ public class PrivateTierBoardController : MonoBehaviour
         (revealCoordinator == null || !revealCoordinator.IsAnswerLocked) &&
         (independentSubmission == null || !independentSubmission.IsLocalLocked);
 
+    public void ConfigureCards(PrivateAnswerCard[] activeCards)
+    {
+        cards = activeCards; cardsById.Clear(); pending.Clear(); observedAnswers.Clear();
+        foreach (var card in cards) cardsById.Add(card.CardId, card);
+#if UNITY_EDITOR
+        selectedCardId = cards.Length > 0 ? cards[0].CardId : "";
+#endif
+    }
     private void Awake()
     {
         foreach (var card in cards) if (card != null) cardsById.Add(card.CardId, card);
@@ -76,7 +84,7 @@ public class PrivateTierBoardController : MonoBehaviour
     {
         pending.Clear(); observedAnswers.Clear();
 #if UNITY_EDITOR
-        selectedCardId = "Card_01";
+        selectedCardId = cards.Length > 0 ? cards[0].CardId : "";
 #endif
         if (!zones.TryGetValue("Unclassified", out var zone)) return;
         foreach (var card in cards) if (card != null) card.ApplyPlacement(zone, true);
@@ -107,10 +115,10 @@ public class PrivateTierBoardController : MonoBehaviour
         if (instructions != null)
         {
             string text = independentSubmission != null && independentSubmission.IsLocalLocked ? "Answers submitted. Waiting for other Participants..." : revealCoordinator != null && revealCoordinator.IsAnswerLocked && !revealCoordinator.HasRevealed ? "All answers complete. Preparing simultaneous reveal..." :
-                CanInteract ? "Only your answers are visible. Grab any card and place it in A-D.\nReturn to Unclassified to cancel."
+                CanInteract ? "Only your answers are visible. Grab any card and place it in A-E.\nReturn to Unclassified to cancel."
                 : candidateSync != null && candidateSync.IsIndependentAnswerPhase ? "Waiting for connection / Participant registration" : "YOUR ANSWER - READ ONLY";
 #if UNITY_EDITOR
-            if (CanInteract) text += "\nF6 / F7 / F8 (Q / W / E): select 01 / 02 / 03   |   1-4: A-D   |   0: cancel   |   Selected: " + selectedCardId;
+            if (CanInteract) text += "\nF1-F8: select card 01-08   |   1-5: A-E   |   0: cancel   |   Selected: " + selectedCardId;
 #endif
             if (instructions.text != text) instructions.text = text;
         }
@@ -119,24 +127,17 @@ public class PrivateTierBoardController : MonoBehaviour
     {
         if (hidden == mainHidden) return;
         for (int i = 0; i < mainRenderers.Length; i++) if (mainRenderers[i] != null)
-        { if (hidden) mainRendererStates[i] = mainRenderers[i].enabled; mainRenderers[i].enabled = hidden ? false : mainRendererStates[i]; }
+        { if (hidden) mainRendererStates[i] = mainRenderers[i].enabled; mainRenderers[i].enabled = hidden ? false : mainRendererStates[i];
+            var face = mainRenderers[i].GetComponent<PilotCardFace>(); if (face != null) face.SetVisible(mainRenderers[i].enabled); }
         for (int i = 0; i < mainCanvases.Length; i++) if (mainCanvases[i] != null)
         { if (hidden) mainCanvasStates[i] = mainCanvases[i].enabled; mainCanvases[i].enabled = hidden ? false : mainCanvasStates[i]; }
         for (int i = 0; i < mainColliders.Length; i++) if (mainColliders[i] != null)
         { if (hidden) mainColliderStates[i] = mainColliders[i].enabled; mainColliders[i].enabled = hidden ? false : mainColliderStates[i]; }
         mainHidden = hidden;
     }
-    public TierZone FindDropZone(Vector3 position)
-    {
-        TierZone result = null; float closest = float.PositiveInfinity;
-        foreach (var zone in tierZones)
-        {
-            if (zone == null || !zone.ContainsDropPoint(position)) continue;
-            float distance = (zone.transform.position - position).sqrMagnitude;
-            if (distance < closest) { closest = distance; result = zone; }
-        }
-        return result;
-    }
+    public TierZone FindDropZone(Vector3 position) => CardDropTargetResolver.Resolve(tierZones, null, position);
+    public TierZone ResolveDropTarget(GameObject card, TierZone previous) => CanInteract
+        ? CardDropTargetResolver.Resolve(tierZones, card, card.transform.position, previous) : null;
     public bool TryPlaceCard(string cardId, string tier)
     {
         if (!CanInteract) return Reject("Not in an enabled Participant private answer phase");
@@ -144,7 +145,7 @@ public class PrivateTierBoardController : MonoBehaviour
         // A selected XR card is allowed to finish its release; keyboard moves are filtered below.
         string previous = card.CurrentTier;
         if (card.IsHeld) return Reject("Release the selected card first");
-        if (!card.CanPlace(zone) || zone.GetAvailableSnapPoint(card.gameObject) == null) return Reject("Tier has no available SnapPoint");
+        if (!card.CanPlace(zone) || zone.PeekAvailableSnapPoint(card.gameObject) == null) return Reject("Tier has no available SnapPoint");
         if (!candidateSync.TrySetCandidate(cardId, tier, out var submitted))
         { if (previous != tier) zone.ReleaseCard(card.gameObject); return Reject("Candidate send rejected"); }
         if (!card.ApplyPlacement(zone)) return Reject("Card is held or target SnapPoint is unavailable");
@@ -179,14 +180,17 @@ public class PrivateTierBoardController : MonoBehaviour
     {
         if (!Application.isPlaying || !CanInteract || !participantRegistry.CanUseEditorParticipantInput) return;
         var keyboard = Keyboard.current; if (keyboard == null) return;
-        if (keyboard.f6Key.wasPressedThisFrame || keyboard.qKey.wasPressedThisFrame) selectedCardId = "Card_01";
-        else if (keyboard.f7Key.wasPressedThisFrame || keyboard.wKey.wasPressedThisFrame) selectedCardId = "Card_02";
-        else if (keyboard.f8Key.wasPressedThisFrame || keyboard.eKey.wasPressedThisFrame) selectedCardId = "Card_03";
+        if (keyboard.f6Key.wasPressedThisFrame || keyboard.qKey.wasPressedThisFrame) selectedCardId = cards[0].CardId;
+        else if (keyboard.f7Key.wasPressedThisFrame || keyboard.wKey.wasPressedThisFrame) selectedCardId = cards[1].CardId;
+        else if (keyboard.f8Key.wasPressedThisFrame || keyboard.eKey.wasPressedThisFrame) selectedCardId = cards[2].CardId;
+        for (int i = 0; i < cards.Length && i < 8; i++)
+            if (keyboard[(UnityEngine.InputSystem.Key)((int)UnityEngine.InputSystem.Key.F1 + i)].wasPressedThisFrame) selectedCardId = cards[i].CardId;
         string tier = null;
         if (keyboard.digit1Key.wasPressedThisFrame) tier = "A";
         else if (keyboard.digit2Key.wasPressedThisFrame) tier = "B";
         else if (keyboard.digit3Key.wasPressedThisFrame) tier = "C";
         else if (keyboard.digit4Key.wasPressedThisFrame) tier = "D";
+        else if (keyboard.digit5Key.wasPressedThisFrame) tier = "E";
         else if (keyboard.digit0Key.wasPressedThisFrame) tier = "Unclassified";
         if (tier != null && cardsById.TryGetValue(selectedCardId, out var card))
         { if (card.IsHeld) Reject("Release the selected card first"); else TryPlaceCard(selectedCardId, tier); }

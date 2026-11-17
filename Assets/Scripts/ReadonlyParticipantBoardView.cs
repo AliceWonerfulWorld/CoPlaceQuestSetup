@@ -22,6 +22,10 @@ public class ReadonlyParticipantBoardView : MonoBehaviour
     private string displayedId;
     public int DisplayedParticipantCount { get; private set; }
     public string DisplayedRevealId => displayedId;
+    public void ConfigureCards(CardVisual[] values)
+    {
+        Clear(); cardVisuals = values; visuals.Clear(); Awake();
+    }
     private void Awake()
     {
         if (cardVisuals != null) foreach (var v in cardVisuals) if (v != null && !string.IsNullOrEmpty(v.cardId)) visuals[v.cardId] = v;
@@ -72,45 +76,44 @@ public class ReadonlyParticipantBoardView : MonoBehaviour
         Label("Header", board, "P" + participant.displayId + "  INITIAL ANSWER", new Vector2(left, top - 92), new Vector2(boardSize.x - 64, 58), 46, Color.white);
         Label("Identity", board, "Participant " + participant.displayId + "  ·  Client " + participant.clientNo,
             new Vector2(left, top - 139), new Vector2(boardSize.x - 64, 32), 25, new Color(0.64f, 0.76f, 0.80f));
-        float rowHeight = (boardSize.y - 234) / 4;
-        for (int tierIndex = 0; tierIndex < 4; tierIndex++)
+        float rowHeight = (boardSize.y - 234) / 5;
+        for (int tierIndex = 0; tierIndex < 5; tierIndex++)
         {
-            string tier = new[] { "A", "B", "C", "D" }[tierIndex];
+            string tier = new[] { "A", "B", "C", "D", "E" }[tierIndex];
             var row = Rect("Tier_" + tier, board, new Vector2(0, top - 190 - rowHeight * (tierIndex + 0.5f)), new Vector2(boardSize.x - 56, rowHeight - 10));
             Panel("RowSurface", row, Vector2.zero, row.sizeDelta, new Color(0.09f, 0.15f, 0.18f, 0.86f));
             Label("TierLabel", row, tier, new Vector2(-row.sizeDelta.x / 2 + 21, 0), new Vector2(48, 64), 46, accent);
             var cards = Rect("Cards", row, new Vector2(38, 0), new Vector2(row.sizeDelta.x - 102, row.sizeDelta.y - 14));
-            var layout = cards.gameObject.AddComponent<UnityEngine.UI.HorizontalLayoutGroup>();
-            layout.spacing = 12; layout.childAlignment = TextAnchor.MiddleLeft;
-            layout.childControlHeight = layout.childControlWidth = false;
-            layout.childForceExpandHeight = layout.childForceExpandWidth = false;
             int inTier = 0;
-            float tileWidth = Mathf.Min(162, (cards.sizeDelta.x - 12 * (cardCount - 1)) / Mathf.Max(1, cardCount));
+            float tileWidth = (cards.sizeDelta.x - 36) / 4;
+            float tileHeight = (cards.sizeDelta.y - 12) / 2;
             foreach (var answer in participant.answers)
-                if (answer.tier == tier) { BuildCard(cards, answer.cardId, tileWidth, cards.sizeDelta.y); inTier++; }
+                if (answer.tier == tier)
+                {
+                    var tile = BuildCard(cards, answer.cardId, tileWidth, tileHeight);
+                    tile.anchoredPosition = new Vector2(-cards.sizeDelta.x / 2 + tileWidth / 2 + (inTier % 4) * (tileWidth + 12),
+                        cards.sizeDelta.y / 2 - tileHeight / 2 - (inTier / 4) * (tileHeight + 12));
+                    inTier++;
+                }
             if (inTier == 0) Label("Empty", row, "—", new Vector2(-row.sizeDelta.x / 2 + 110, 0), new Vector2(80, 40), 30, new Color(0.36f, 0.48f, 0.53f));
         }
         Label("Readonly", board, "READ ONLY  ·  " + cardCount + " / " + cardCount + " ANSWERED",
             new Vector2(left, -top + 30), new Vector2(boardSize.x - 64, 36), 24, new Color(0.64f, 0.76f, 0.80f));
     }
-    private void BuildCard(RectTransform parent, string cardId, float width, float height)
+    private RectTransform BuildCard(RectTransform parent, string cardId, float width, float height)
     {
         var card = Rect(cardId, parent, Vector2.zero, new Vector2(width, height));
-        Panel("CardSurface", card, Vector2.zero, card.sizeDelta, new Color(0.14f, 0.23f, 0.26f, 1));
         visuals.TryGetValue(cardId, out var visual);
-        var imageRect = Rect("CardImage", card, new Vector2(0, 16), new Vector2(width - 18, height - 47));
-        var image = imageRect.gameObject.AddComponent<UnityEngine.UI.RawImage>();
-        image.texture = visual != null ? visual.texture : null; image.raycastTarget = false;
-        image.color = image.texture != null ? Color.white : new Color(0.22f, 0.34f, 0.38f);
-        if (image.texture != null)
+        bool pilot = cardId.StartsWith("A", StringComparison.Ordinal) || cardId.StartsWith("B", StringComparison.Ordinal);
+        if (pilot)
+            PilotCardFace.Populate(card, cardId, visual != null ? visual.displayName : cardId, visual != null ? visual.texture : null, font, true);
+        else
         {
-            float ratio = (float)image.texture.width / image.texture.height;
-            float imageHeight = Mathf.Min(imageRect.sizeDelta.y, imageRect.sizeDelta.x / ratio);
-            imageRect.sizeDelta = new Vector2(imageHeight * ratio, imageHeight);
+            // Preserve the development image content, without the pilot-only photograph crop.
+            var image = Rect("CardImage", card, Vector2.zero, new Vector2(height - 8, height - 8)).gameObject.AddComponent<UnityEngine.UI.RawImage>();
+            image.texture = visual != null ? visual.texture : null; image.raycastTarget = false;
         }
-        string name = visual != null && !string.IsNullOrEmpty(visual.displayName) ? visual.displayName : cardId;
-        var label = Label("CardName", card, name, new Vector2(-width / 2 + 6, -height / 2 + 20), new Vector2(width - 12, 32), 25, Color.white);
-        label.alignment = TextAlignmentOptions.Center;
+        return card;
     }
     private RectTransform Panel(string name, Transform parent, Vector2 pos, Vector2 size, Color color)
     {
@@ -124,7 +127,7 @@ public class ReadonlyParticipantBoardView : MonoBehaviour
         var rect = Rect(name, parent, pos, size);
         rect.pivot = new Vector2(0, 0.5f);
         var label = rect.gameObject.AddComponent<TextMeshProUGUI>(); label.font = font; label.text = text;
-        label.fontSize = fontSize; label.color = color; label.alignment = TextAlignmentOptions.MidlineLeft;
+        label.fontSize = fontSize; label.enableAutoSizing = true; label.fontSizeMin = fontSize * 0.55f; label.fontSizeMax = fontSize; label.color = color; label.alignment = TextAlignmentOptions.MidlineLeft;
         label.raycastTarget = false; label.textWrappingMode = TextWrappingModes.NoWrap;
         label.overflowMode = TextOverflowModes.Ellipsis;
         return label;

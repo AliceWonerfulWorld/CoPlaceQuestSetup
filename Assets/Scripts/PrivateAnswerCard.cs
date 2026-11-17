@@ -14,6 +14,10 @@ public class PrivateAnswerCard : MonoBehaviour, IXRSelectFilter
     private Rigidbody body;
     private TierZone currentZone, hoveredZone;
     private bool suppressRelease;
+    private Vector3 grabStartPosition;
+    private Quaternion grabStartRotation;
+    public TierZone PreviewDropTarget => hoveredZone;
+    public void ConfigureId(string id) => cardId = id;
     public string CardId => cardId;
     public string CurrentTier => currentZone != null ? currentZone.tierName : "Unclassified";
     public bool IsHeld => grab != null && grab.isSelected;
@@ -23,6 +27,7 @@ public class PrivateAnswerCard : MonoBehaviour, IXRSelectFilter
 
     private void Awake()
     {
+        if (body != null) return;
         body = GetComponent<Rigidbody>();
         grab = GetComponent<XRGrabInteractable>();
         grab.selectFilters.Add(this);
@@ -38,13 +43,24 @@ public class PrivateAnswerCard : MonoBehaviour, IXRSelectFilter
         grab.selectEntered.RemoveListener(OnGrabbed);
         grab.selectExited.RemoveListener(OnReleased);
     }
-    private void OnDisable() => ClearHover();
-    private void OnGrabbed(SelectEnterEventArgs args) { body.isKinematic = false; }
-    private void Update()
+    private void CancelDrag()
     {
-        TierZone next = IsHeld && board != null && board.CanInteract ? board.FindDropZone(transform.position) : null;
-        if (next == hoveredZone) return;
-        ClearHover(); hoveredZone = next;
+        ClearHover();
+        if (grab != null && grab.isSelected && grab.interactionManager != null)
+            grab.interactionManager.CancelInteractableSelection((IXRSelectInteractable)grab);
+    }
+    private void OnDisable() => CancelDrag();
+    private void OnApplicationFocus(bool focused) { if (!focused) CancelDrag(); }
+    private void OnApplicationPause(bool paused) { if (paused) CancelDrag(); }
+    private void OnGrabbed(SelectEnterEventArgs args)
+    {
+        grabStartPosition = transform.position; grabStartRotation = transform.rotation; body.isKinematic = false;
+    }
+    private void LateUpdate() => UpdateDragFeedback(IsHeld);
+    private void UpdateDragFeedback(bool held)
+    {
+        TierZone next = held && board != null && board.CanInteract ? board.ResolveDropTarget(gameObject, hoveredZone) : null;
+        if (next != hoveredZone) { ClearHover(); hoveredZone = next; }
         if (hoveredZone != null) hoveredZone.SetHovered(gameObject, true);
     }
     private void ClearHover()
@@ -54,22 +70,24 @@ public class PrivateAnswerCard : MonoBehaviour, IXRSelectFilter
     }
     private void OnReleased(SelectExitEventArgs args)
     {
+        TierZone zone = !suppressRelease && !args.isCanceled && board != null ? board.ResolveDropTarget(gameObject, hoveredZone) : null;
         ClearHover();
         if (suppressRelease) return;
-        TierZone zone = board != null ? board.FindDropZone(transform.position) : null;
         if (zone == null || !board.TryPlaceCard(cardId, zone.tierName)) RestorePosition();
     }
     public void SetInteractionEnabled(bool enabled)
     {
+        if (!enabled) ClearHover();
         if (grab == null || grab.enabled == enabled) return;
         suppressRelease = true;
         grab.enabled = enabled;
         suppressRelease = false;
         if (!enabled) { ClearHover(); RestorePosition(); }
     }
-    public bool CanPlace(TierZone zone) => zone != null && zone.snapPoints.Exists(p => p != null);
+    public bool CanPlace(TierZone zone) => zone != null && zone.PeekAvailableSnapPoint(gameObject) != null;
     public bool ApplyPlacement(TierZone zone, bool forceRelease = false)
     {
+        if (body == null) Awake();
         if (zone == null || (!forceRelease && IsHeld)) return false;
         bool wasEnabled = grab != null && grab.enabled;
         if (forceRelease) SetInteractionEnabled(false);
@@ -83,16 +101,17 @@ public class PrivateAnswerCard : MonoBehaviour, IXRSelectFilter
     }
     private void RestorePosition()
     {
-        if (currentZone == null) return;
-        Transform point = currentZone.GetAvailableSnapPoint(gameObject);
+        Transform point = currentZone != null ? currentZone.GetAvailableSnapPoint(gameObject) : null;
         if (point != null) MoveTo(point);
+        else MoveToPose(grabStartPosition, grabStartRotation);
     }
-    private void MoveTo(Transform point)
+    private void MoveTo(Transform point) => MoveToPose(point.position, point.rotation);
+    private void MoveToPose(Vector3 position, Quaternion rotation)
     {
         body.isKinematic = false;
         body.linearVelocity = Vector3.zero; body.angularVelocity = Vector3.zero;
-        body.position = point.position; body.rotation = point.rotation;
-        transform.SetPositionAndRotation(point.position, point.rotation);
+        body.position = position; body.rotation = rotation;
+        transform.SetPositionAndRotation(position, rotation);
         body.isKinematic = true;
     }
 }

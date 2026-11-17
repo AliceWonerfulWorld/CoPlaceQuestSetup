@@ -171,12 +171,12 @@ public class FinalAgreementManager : MonoBehaviour
         foreach (string cardId in placementSync.CardIds)
             if (!placementSync.GetCard(cardId).CanConfirmNormalPlacement) { StatusMessage = "Release all cards before confirming"; Changed(); return; }
         foreach (string cardId in placementSync.CardIds)
-            if (!IsTier(SessionVariableTransport.GetGlobalVariable(network, sessionManager, "normalPlacement_" + cardId))) { FailAgreement("Unclassified cards remain. Place every card in A-D."); return; }
+            if (!IsTier(SessionVariableTransport.GetGlobalVariable(network, sessionManager, "normalPlacement_" + cardId))) { FailAgreement("Unclassified cards remain. Place every card in A-E."); return; }
         if (!EnsureVersions()) { StatusMessage = "Waiting for placement synchronization"; Changed(); return; }
         string fingerprint = CurrentFingerprint();
         if (string.IsNullOrEmpty(fingerprint) || CurrentEntries() == null)
         {
-            FailAgreement("Unclassified cards remain. Place every card in A-D."); return;
+            FailAgreement("Unclassified cards remain. Place every card in A-E."); return;
         }
         pendingReady = fingerprint;
         if (!SessionVariableTransport.SetClientVariable(network, sessionManager, ReadyVariable, fingerprint)) { pendingReady = null; StatusMessage = "Ready send failed"; Changed(); return; }
@@ -242,7 +242,7 @@ public class FinalAgreementManager : MonoBehaviour
         foreach (var entry in entries) b.Append('|').Append(entry.cardId).Append(':').Append(entry.tier).Append(':').Append(entry.revision);
         using (var sha = SHA256.Create()) return Convert.ToBase64String(sha.ComputeHash(Encoding.UTF8.GetBytes(b.ToString())));
     }
-    private static bool IsTier(string tier) => tier == "A" || tier == "B" || tier == "C" || tier == "D";
+    private static bool IsTier(string tier) => tier == "A" || tier == "B" || tier == "C" || tier == "D" || tier == "E";
     private void PublishHeldCards()
     {
         if (!IsLocalParticipant) return;

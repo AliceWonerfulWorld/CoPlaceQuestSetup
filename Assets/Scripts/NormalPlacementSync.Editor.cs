@@ -17,6 +17,8 @@ public partial class NormalPlacementSync
         if (keyboard.f6Key.wasPressedThisFrame) selected = "Card_01";
         else if (keyboard.f7Key.wasPressedThisFrame) selected = "Card_02";
         else if (keyboard.f8Key.wasPressedThisFrame) selected = "Card_03";
+        for (int i = 0; i < cards.Length && i < 8; i++)
+            if (keyboard[(Key)((int)Key.F1 + i)].wasPressedThisFrame) selected = cards[i].name;
         if (selected != null)
         {
             editorSelectedCardId = selected;
@@ -28,6 +30,7 @@ public partial class NormalPlacementSync
         else if (keyboard.digit2Key.wasPressedThisFrame) tier = "B";
         else if (keyboard.digit3Key.wasPressedThisFrame) tier = "C";
         else if (keyboard.digit4Key.wasPressedThisFrame) tier = "D";
+        else if (keyboard.digit5Key.wasPressedThisFrame) tier = "E";
         else if (keyboard.digit0Key.wasPressedThisFrame) tier = "Unclassified";
         if (tier != null) TryPlaceEditorTestCard(editorSelectedCardId, tier);
     }

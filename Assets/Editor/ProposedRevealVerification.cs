@@ -181,7 +181,7 @@ public static class ProposedRevealVerification
             Debug.Log($"[Proposed Reveal Verification] {(report.passed ? "PASS" : "FAIL")} / {checks.Count} checks");
         }
     }
-    public static Endpoint CreateEndpoint(int client, int count)
+    public static Endpoint CreateEndpoint(int client, int count, bool includeInactiveCards = false)
     {
         var e = new Endpoint { scene = EditorSceneManager.OpenPreviewScene("Assets/Scenes/QuestSetup.unity") };
         e.components = e.scene.GetRootGameObjects().SelectMany(o => o.GetComponentsInChildren<Component>(true)).ToArray();
@@ -219,6 +219,9 @@ public static class ProposedRevealVerification
         Call(e.submission, "OnEnable"); Call(e.placements, "Start"); Call(e.agreement, "Start"); Call(e.shared, "OnEnable");
         Call(e.privateBoard, "OnEnable"); Call(e.privateBoard, "Start"); Call(e.privateBoard, "Update");
         Call(e.reveal, "OnEnable"); Call(e.view, "OnEnable"); Call(e.view, "Start");
+        // Existing development scenarios exercise the three active food cards.
+        if (!includeInactiveCards) e.components = e.components.Where(c =>
+            !(c is CardTierDetector || c is PrivateAnswerCard) || c.gameObject.activeSelf).ToArray();
         return e;
     }
     public static void Deliver(Endpoint from, Endpoint to)

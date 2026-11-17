@@ -24,6 +24,7 @@ public static class PrivateTierBoardVerification
         try
         {
             var components = scene.GetRootGameObjects().SelectMany(o => o.GetComponentsInChildren<Component>(true)).ToArray();
+            components = components.Where(c => !(c is CardTierDetector || c is PrivateAnswerCard) || c.gameObject.activeSelf).ToArray();
             T One<T>() where T : Component => components.OfType<T>().Single();
             var net = One<NetSyncManager>();
             Set(net, "_offlineMode", true); Set(net, "_clientNo", 1);
@@ -60,11 +61,17 @@ public static class PrivateTierBoardVerification
             // One offline client is alive; this makes legacy per-card completion
             // eligible so the no-premature-Reveal test exercises that exact case.
             Set(registry, "expectedParticipantCount", 1);
+            // Current permission guards require a completed Session even in isolated QA.
+            Set(registry, "localRole", ExperimentParticipantRegistry.ClientRole.Experimenter); Call(registry, "Update");
+            if (!session.StartNewSession()) throw new Exception("Initial QA Session rejected");
+            Call(session, "Update"); Call(session, "Update"); Call(session, "Update");
+            Set(registry, "localRole", ExperimentParticipantRegistry.ClientRole.Participant); Call(registry, "Update"); registry.RefreshParticipants();
+            Call(board, "Update");
             var mains = components.OfType<CardTierDetector>().ToArray();
             var initial = mains.Select(c => (c.transform.position, c.CurrentTier)).ToArray();
             var privateCards = components.OfType<PrivateAnswerCard>().OrderBy(c => c.CardId).ToArray();
             void Check(bool result, string name) { if (!result) throw new Exception(name); checks.Add(name); }
-            Check(privateCards.Length == 3 && components.OfType<TierZone>().Count() == 10, "Three private cards / five independent private zones");
+            Check(privateCards.Length == 3 && components.OfType<TierZone>().Count() == 12, "Three development cards / six independent private zones (A-E + Unclassified)");
             Check(privateCards.All(c => c.GetComponent<CardTierDetector>() == null &&
                 c.GetComponents<MonoBehaviour>().All(m => m.GetType().Namespace == null || !m.GetType().Namespace.StartsWith("Styly.NetSync"))), "Private cards contain no Main/NetSync behaviour");
             Check(board.CanInteract && board.IsVisible, "Proposed Participant can interact");
@@ -91,7 +98,7 @@ public static class PrivateTierBoardVerification
                 !cancelled.Answered && cancelled.SelectedAt == "", "Unclassified cancels and clears selectedAt");
             Check(board.TryPlaceCard("Card_01", "A"), "Cancelled card can answer again");
             Check(mains.Select((c, i) => c.transform.position == initial[i].position && c.CurrentTier == initial[i].CurrentTier).All(v => v) &&
-                !net.GetAllGlobalVariables().Keys.Any(k => k.StartsWith("normalPlacement_")), "Private answers never move or publish Main placements");
+                mains.All(c => SessionVariableTransport.GetGlobalVariable(net, session, "normalPlacement_" + c.name) == "Unclassified"), "Private answers never move or publish Main placements");
             foreach (var state in new[] { ExperimentManager.ExperimentState.Revealed, ExperimentManager.ExperimentState.Discussion, ExperimentManager.ExperimentState.Confirmed })
             {
                 Set(manager, "currentState", state); Call(board, "Update");
@@ -123,7 +130,7 @@ public static class PrivateTierBoardVerification
             }
             Peer(2, ExperimentSessionManager.AckVariable, session.CurrentSessionId);
             Call(session, "Update"); Call(session, "Update"); Call(board, "Update");
-            Check(!session.IsResettingSession && session.SessionEpoch == 1 && privateCards.All(c => c.CurrentTier == "Unclassified") &&
+            Check(!session.IsResettingSession && session.SessionEpoch == 2 && privateCards.All(c => c.CurrentTier == "Unclassified") &&
                 sync.GetParticipantCandidates(1).Values.All(a => !a.Answered && a.Tier == "Unclassified" && a.SelectedAt == ""), "Session epoch / data / local view reset together");
             Set(registry, "localRole", ExperimentParticipantRegistry.ClientRole.Participant); Call(registry, "Update"); registry.RefreshParticipants();
             net.SetGlobalVariable("experimentMode", "Normal"); Call(board, "Update"); Call(normal, "Start");

@@ -32,6 +32,12 @@ public partial class NormalPlacementSync : MonoBehaviour
         experimentManager.CurrentState != ExperimentManager.ExperimentState.Confirmed &&
         participantRegistry != null && participantRegistry.CanOperateInSession(sessionManager);
 
+    public void ConfigureCards(CardTierDetector[] activeCards)
+    {
+        cards = activeCards; cardsById.Clear(); zonesByTier.Clear(); pendingPlacements.Clear(); finalTiers.Clear();
+        Awake();
+    }
+
     private void Awake()
     {
         foreach (var card in cards ?? Array.Empty<CardTierDetector>())

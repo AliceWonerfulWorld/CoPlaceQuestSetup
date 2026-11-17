@@ -18,6 +18,7 @@ public class CandidateSyncTest : MonoBehaviour
     [SerializeField, Tooltip("Use local Private answers and the all-card Reveal flow; never legacy per-card markers.")]
     private bool usePrivateAnswerBoard = true;
     [SerializeField] private string[] answerCardIds = { "Card_01", "Card_02", "Card_03" };
+    public void ConfigureCards(string[] ids) { answerCardIds = ids; ResetLocalSession(); }
     public IReadOnlyList<string> AnswerCardIds => answerCardIds;
     public int LocalClientNo => Network != null ? Network.ClientNo : 0;
     public bool IsDataReady => Network != null && Network.IsReady && (sessionManager == null || !sessionManager.IsResettingSession);
@@ -77,7 +78,7 @@ public class CandidateSyncTest : MonoBehaviour
     private NetSyncManager Network => netSyncManager != null ? netSyncManager : NetSyncManager.Instance;
     public bool IsCardRevealed(string cardId) => IsProposed &&
         (revealedCards.ContainsKey(cardId) || (revealCoordinator != null && revealCoordinator.HasRevealed));
-    private static bool IsValidTier(string tier) => tier == "A" || tier == "B" || tier == "C" || tier == "D";
+    private static bool IsValidTier(string tier) => tier == "A" || tier == "B" || tier == "C" || tier == "D" || tier == "E";
     private static string Key(int client, string card) => $"{client}_{card}";
 
     private void Start() { started = true; Subscribe(); }

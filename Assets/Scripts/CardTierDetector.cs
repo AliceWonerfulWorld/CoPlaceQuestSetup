@@ -8,10 +8,11 @@ public class CardTierDetector : MonoBehaviour, UnityEngine.XR.Interaction.Toolki
     private bool CanEditSharedBoard => normalPlacementSync != null && normalPlacementSync.CanLocalEditSharedBoard;
     public bool Process(UnityEngine.XR.Interaction.Toolkit.Interactors.IXRSelectInteractor interactor,
         UnityEngine.XR.Interaction.Toolkit.Interactables.IXRSelectInteractable interactable)
-        => CanEditSharedBoard &&
-            (normalPlacementSync == null || (!normalPlacementSync.IsResettingSession &&
-            !normalPlacementSync.IsLocalInteractionLocked && !normalPlacementSync.IsCardConfirmed(gameObject.name)));
+        => CanDrag;
 
+    private bool CanDrag => isActiveAndEnabled && CanEditSharedBoard && !normalPlacementSync.IsResettingSession &&
+        !normalPlacementSync.IsLocalInteractionLocked && !normalPlacementSync.IsCardConfirmed(gameObject.name);
+    public TierZone PreviewDropTarget => hoveredZone;
     public string CurrentTier { get; private set; } = "Unclassified";
 
     [SerializeField]
@@ -29,6 +30,7 @@ public class CardTierDetector : MonoBehaviour, UnityEngine.XR.Interaction.Toolki
     [Tooltip("Drop targets cached in the scene. The card center determines the nearest valid Tier.")]
     [SerializeField] private TierZone[] placementZones;
     private TierZone hoveredZone;
+    private readonly TierZone[] legacyZone = new TierZone[1];
     private Vector3 grabStartPosition;
     private Quaternion grabStartRotation;
 
@@ -39,6 +41,7 @@ public class CardTierDetector : MonoBehaviour, UnityEngine.XR.Interaction.Toolki
     public void SetNormalConfirmationLock(bool locked, TierZone finalZone)
     {
         if (grabInteractable == null || rb == null) return;
+        if (locked) ClearHover();
         if (locked != normalConfirmationLocked)
         {
             normalConfirmationLocked = locked;
@@ -75,6 +78,7 @@ public class CardTierDetector : MonoBehaviour, UnityEngine.XR.Interaction.Toolki
 
     private void Awake() 
     {
+        if (rb != null) return;
         rb = GetComponent<Rigidbody>();
         grabInteractable = GetComponent<XRGrabInteractable>();
 
@@ -103,29 +107,32 @@ public class CardTierDetector : MonoBehaviour, UnityEngine.XR.Interaction.Toolki
         rb.isKinematic = false;
     }
 
-    private void Update()
+    private void LateUpdate() => UpdateDragFeedback(grabInteractable != null && grabInteractable.isSelected);
+    private void UpdateDragFeedback(bool held)
     {
-        TierZone target = CanEditSharedBoard &&
-            grabInteractable != null && grabInteractable.isSelected ? FindDropZone() : null;
-        if (target == hoveredZone) return;
-        if (hoveredZone != null) hoveredZone.SetHovered(gameObject, false);
-        hoveredZone = target;
+        TierZone target = held && CanDrag ? FindDropZone() : null;
+        if (target != hoveredZone) { ClearHover(); hoveredZone = target; }
         if (hoveredZone != null) hoveredZone.SetHovered(gameObject, true);
     }
-
+    private void ClearHover()
+    {
+        if (hoveredZone != null) hoveredZone.SetHovered(gameObject, false);
+        hoveredZone = null;
+    }
+    private void CancelDrag()
+    {
+        ClearHover();
+        if (grabInteractable != null && grabInteractable.isSelected && grabInteractable.interactionManager != null)
+            grabInteractable.interactionManager.CancelInteractableSelection((IXRSelectInteractable)grabInteractable);
+    }
+    private void OnDisable() => CancelDrag();
+    private void OnApplicationFocus(bool focused) { if (!focused) CancelDrag(); }
+    private void OnApplicationPause(bool paused) { if (paused) CancelDrag(); }
     private TierZone FindDropZone()
     {
-        // Legacy/test setups may still use trigger-driven selection.
-        if (placementZones == null || placementZones.Length == 0) return candidateZone;
-        TierZone closest = null;
-        float best = float.PositiveInfinity;
-        foreach (var zone in placementZones)
-        {
-            if (zone == null || !zone.ContainsDropPoint(transform.position)) continue;
-            float distance = (zone.transform.position - transform.position).sqrMagnitude;
-            if (distance < best) { closest = zone; best = distance; }
-        }
-        return closest;
+        if (placementZones == null || placementZones.Length == 0)
+        { legacyZone[0] = candidateZone; return CardDropTargetResolver.Resolve(legacyZone, gameObject, transform.position, hoveredZone); }
+        return CardDropTargetResolver.Resolve(placementZones, gameObject, transform.position, hoveredZone);
     }
 
     private void RestorePreviousPlacement()
@@ -169,58 +176,24 @@ public class CardTierDetector : MonoBehaviour, UnityEngine.XR.Interaction.Toolki
 
     private void OnReleased(SelectExitEventArgs args)
     {
-        if (normalPlacementSync != null && normalPlacementSync.RejectLocalInteraction(gameObject.name)) return;
-        if (hoveredZone != null) hoveredZone.SetHovered(gameObject, false);
-        hoveredZone = null;
-        if (!CanEditSharedBoard)
+        // Preserve the previous target while resolving hysteresis, then clear all presentation.
+        TierZone target = CanDrag && !args.isCanceled ? FindDropZone() : null;
+        ClearHover();
+        if (target == null) { RestorePreviousPlacement(); return; }
+        Transform point = target.GetAvailableSnapPoint(gameObject);
+        if (point == null) { RestorePreviousPlacement(); return; }
+        // Commit through the existing transport before moving; a rejected send must restore the old placement.
+        if (!normalPlacementSync.SendPlacement(gameObject.name, target.tierName))
         {
-            RestorePreviousPlacement();
-            return;
+            if (currentZone != target) target.ReleaseCard(gameObject);
+            RestorePreviousPlacement(); return;
         }
-        candidateZone = FindDropZone();
-        if (candidateZone == null)
-        {
-            RestorePreviousPlacement();
-            return;
-        }
-
-        // Reserve the new slot before releasing the old one. Full/invalid targets
-        // return the card to its prior position without changing the answer.
-        Transform snapPoint = candidateZone.GetAvailableSnapPoint(gameObject);
-        if (snapPoint == null)
-        {
-            RestorePreviousPlacement();
-            return;
-        }
-        if (currentZone != null && currentZone != candidateZone)
-            currentZone.ReleaseCard(gameObject);
-
-        if (!rb.isKinematic)
-        {
-            rb.linearVelocity = Vector3.zero;
-            rb.angularVelocity = Vector3.zero;
-        }
-
-        transform.position = snapPoint.position;
-        transform.rotation = snapPoint.rotation;
-
-        // 配置後は物理演算で動かないよう固定
-        rb.isKinematic = true;
-
-        // 現在位置を更新
-        currentZone = candidateZone;
-        CurrentTier = candidateZone.tierName;
-
-        Debug.Log(
-            $"{gameObject.name} classified as Tier {CurrentTier}"
-            );
-        
-        if (CanEditSharedBoard)
-        {
-            if (normalPlacementSync != null)
-                normalPlacementSync.SendPlacement(gameObject.name, CurrentTier);
-        }
-
+        if (currentZone != null && currentZone != target) currentZone.ReleaseCard(gameObject);
+        rb.isKinematic = false; rb.linearVelocity = Vector3.zero; rb.angularVelocity = Vector3.zero;
+        rb.position = point.position; rb.rotation = point.rotation;
+        transform.SetPositionAndRotation(point.position, point.rotation); rb.isKinematic = true;
+        currentZone = candidateZone = target; CurrentTier = target.tierName;
+        Debug.Log($"[Card Drop] {gameObject.name} -> {CurrentTier}", this);
     }
 
     public void ResetSessionPlacement(TierZone zone)

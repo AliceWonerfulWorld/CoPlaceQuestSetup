@@ -1,0 +1,101 @@
+{
+  "passed": true,
+  "cards": [
+    {
+      "card_id": "A01",
+      "display_name": "カラオケ",
+      "image": "Assets/PilotCards/A01_karaoke.png",
+      "sha256": "05ffcb89dd96ab5153681b8a3ce9d221159e673ddd41480f0322a366fc26f9eb"
+    },
+    {
+      "card_id": "A02",
+      "display_name": "ボウリング",
+      "image": "Assets/PilotCards/A02_bowling.png",
+      "sha256": "5d5130c1a9a7b72f77de40f2b8116b071bf888123893a404a9ce2dd57df3c795"
+    },
+    {
+      "card_id": "A03",
+      "display_name": "ボードゲーム会",
+      "image": "Assets/PilotCards/A03_boardgames.png",
+      "sha256": "f10b181950fa8c52d046e417ec3033c03ccb1025c5b01b779703f02076d3d69b"
+    },
+    {
+      "card_id": "A04",
+      "display_name": "BBQ",
+      "image": "Assets/PilotCards/A04_barbecue.png",
+      "sha256": "518be00ce3badf53558f7292c58408bbe0b29c6255eccce01e2716778b2b5a62"
+    },
+    {
+      "card_id": "A05",
+      "display_name": "チーム対抗クイズ大会",
+      "image": "Assets/PilotCards/A05_team_quiz.png",
+      "sha256": "9ad64ea90168dd35019d5bfe276de0c665940c9d9842992fba2a87efe2a359eb"
+    },
+    {
+      "card_id": "A06",
+      "display_name": "お花見",
+      "image": "Assets/PilotCards/A06_hanami.png",
+      "sha256": "fccb70154eb41248a0eb8f56b2076c8aa63b0af3070c6b8bb41a697dc121e417"
+    },
+    {
+      "card_id": "A07",
+      "display_name": "卓球大会",
+      "image": "Assets/PilotCards/A07_table_tennis.png",
+      "sha256": "d0ef17603316c2c99f3937fe1fa75a41a0130742f76149aa46d4953cc3f4e083"
+    },
+    {
+      "card_id": "A08",
+      "display_name": "キャンパス写真ラリー",
+      "image": "Assets/PilotCards/A08_photo_rally.png",
+      "sha256": "7c0df7c1f97f068ed5a28866e7525bc576c4e665e793b990982232eb9c077346"
+    },
+    {
+      "card_id": "B01",
+      "display_name": "ダーツ",
+      "image": "Assets/PilotCards/B01_darts.png",
+      "sha256": "0ef198c9e7fe4dc79bd611a00d99539848a21ea8a51d43bda29a43c749f1c5b0"
+    },
+    {
+      "card_id": "B02",
+      "display_name": "映画鑑賞会",
+      "image": "Assets/PilotCards/B02_movie_night.png",
+      "sha256": "46767fc7bac3d14cfcc2a6f53daf2be2e0cd25052439b48272cee3ec3364243a"
+    },
+    {
+      "card_id": "B03",
+      "display_name": "ゲーム交流会",
+      "image": "Assets/PilotCards/B03_video_games.png",
+      "sha256": "466da1be51b275a1362a2328400b0f27cff9d7e8d746d6561558ecb80081b15e"
+    },
+    {
+      "card_id": "B04",
+      "display_name": "公園ピクニック",
+      "image": "Assets/PilotCards/B04_picnic.png",
+      "sha256": "202f5fbe50996b3c80139d91e8f91a9edfe4d8d089c2f9fe866315f21e065de5"
+    },
+    {
+      "card_id": "B05",
+      "display_name": "料理交流会",
+      "image": "Assets/PilotCards/B05_cooking.png",
+      "sha256": "09c99a6b735c40831dde43dc55f109c26d4b5447f0eec3cf8aac92fc1efb4708"
+    },
+    {
+      "card_id": "B06",
+      "display_name": "カフェ交流会",
+      "image": "Assets/PilotCards/B06_cafe.png",
+      "sha256": "50c60576ce1db3ee58053f0404f847dba409ccd22076750a9830c201d2e29977"
+    },
+    {
+      "card_id": "B07",
+      "display_name": "バドミントン大会",
+      "image": "Assets/PilotCards/B07_badminton.png",
+      "sha256": "a1fcdd98fecdc05830b1840c6ab4c786922470bd8576b7e5ad6cdd58c8ca3c84"
+    },
+    {
+      "card_id": "B08",
+      "display_name": "ものづくり体験会",
+      "image": "Assets/PilotCards/B08_craft.png",
+      "sha256": "4f1ec0b885ab01eec03206f29cd8e3f335047174d793b629553e9d2697619a13"
+    }
+  ]
+}

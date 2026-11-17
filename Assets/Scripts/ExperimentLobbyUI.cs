@@ -3,7 +3,7 @@ using UnityEngine;
 
 public class ExperimentLobbyUI : MonoBehaviour
 {
-    public const string GeneralDescription = "複数人で画像カードをA〜DのTierに分類します。\n他の参加者と話し合いながら、\n最終的な配置を決定してください。";
+    public const string GeneralDescription = "複数人で画像カードをA〜EのTierに分類します。\n他の参加者と話し合いながら、\n最終的な配置を決定してください。";
     public const string NormalDescription = "他の参加者の配置を確認しながら、\n同じTierBoard上で画像カードを分類します。";
     public const string ProposedDescription = "最初に他の参加者の回答を見ずに個別に分類します。\n全員の回答後に結果を比較し、\n話し合いながら最終配置を決定します。";
     [SerializeField] private ExperimentLobbyController lobby;

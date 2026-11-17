@@ -11,6 +11,9 @@ public class ExperimentLobbyController : MonoBehaviour
     [SerializeField] private ExperimentParticipantRegistry participantRegistry;
     [SerializeField] private ExperimentSessionManager sessionManager;
     [Serializable] private class StartRecord { public string id, sessionId, mode; public long epoch; public int owner; }
+    // A received/retained Start, never merely a queued request.
+    public event Action<string, string, ExperimentManager.ExperimentMode> OnExperimentStarted;
+    public string StartedEventId => IsExperimentStarted ? started.id : null;
     private StartRecord started;
     private StartRecord pending;
     private float nextRetry;
@@ -82,7 +85,10 @@ public class ExperimentLobbyController : MonoBehaviour
         if (record != null)
         {
             if (started == null) Debug.Log($"[Experiment Start Received] {record.mode} / Session {record.sessionId}", this);
+            bool firstObservation = started == null || started.id != record.id;
             started = record; pending = null;
+            if (firstObservation) OnExperimentStarted?.Invoke(record.sessionId, record.id,
+                record.mode == "Normal" ? ExperimentManager.ExperimentMode.Normal : ExperimentManager.ExperimentMode.Proposed);
         }
         if (pending != null && Time.unscaledTime >= nextRetry)
         {
