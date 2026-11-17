@@ -51,9 +51,10 @@ public class ExperimentSessionManager : MonoBehaviour
     public ExperimentManager.ExperimentMode SessionMode => control != null && control.mode == "Normal" ? ExperimentManager.ExperimentMode.Normal : ExperimentManager.ExperimentMode.Proposed;
     public bool IsResettingSession { get; private set; }
     public string LastFailure { get; private set; } = "";
+    public string LogSaveFailure => experimentManager != null ? experimentManager.GetComponent<ExperimentLogger>()?.LastError ?? "" : "";
     public event Action<string> OnSessionResetStarted;
     public event Action<string> OnSessionStarted;
-    private void Start() { started = true; Subscribe(); }
+    private void Start() { started = true; Subscribe(); if (!Application.isMobilePlatform) EnsureResetUI(); }
     private void OnEnable() { if (started) Subscribe(); }
     private void OnDisable()
     {
@@ -290,14 +291,24 @@ public class ExperimentSessionManager : MonoBehaviour
         Debug.Log($"[Session Reset Complete] Session ID: {CurrentSessionId}");
         OnSessionStarted?.Invoke(CurrentSessionId);
     }
+    public SessionResetUI EnsureResetUI()
+    {
+        var ui = GetComponent<SessionResetUI>();
+        if (ui == null) ui = gameObject.AddComponent<SessionResetUI>();
+        ui.Configure(this, participantRegistry);
+        return ui;
+    }
+    public void RequestResetFromUI() => EnsureResetUI().RequestConfirmation();
     public bool StartNewSession()
     {
         Subscribe();
         if (participantRegistry == null || !participantRegistry.IsLocalExperimenter) { Debug.LogWarning("[Session Reset Rejected] Local role is not Experimenter", this); return false; }
         if (network == null || !network.IsReady) { Fail("NetSync is not ready"); return false; }
-        if (pendingSessionRequestId != null) { Fail("Reset request is awaiting Room acknowledgement"); return false; }
+        if (IsResettingSession || pendingSessionRequestId != null) { Fail("Reset is already in progress; waiting for Room / participant acknowledgement"); return false; }
         if (normalPlacementSync == null || finalAgreement == null || candidateSync == null || experimentManager == null) { Fail("Session component references are missing"); return false; }
         if (!normalPlacementSync.HasUnclassifiedZone) { Fail("Unclassified TierZone is missing"); return false; }
+        var logger = experimentManager.GetComponent<ExperimentLogger>();
+        if (logger != null && !logger.TryFlushBeforeReset()) { Fail("CSV save failed; Reset blocked: " + logger.LastError); return false; }
         Debug.Log($"[Session Reset Start] Previous Session: {CurrentSessionId}");
         var next = new Control { id = Guid.NewGuid().ToString("N"), startedAt = DateTime.UtcNow.ToString("o"), phase = "resetting", owner = network.ClientNo, mode = experimentManager.CurrentMode.ToString(), cardSetId = cardSets != null ? cardSets.NextSessionSetId : "Development", epoch = SessionEpoch + 1 };
         // Local operations stop immediately while waiting for the Room echo.

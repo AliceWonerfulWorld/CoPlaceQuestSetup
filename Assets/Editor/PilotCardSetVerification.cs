@@ -42,7 +42,7 @@ public static class PilotCardSetVerification
                     Set(e.session, "nextAttempt", 0f); Call(e.registry, "Update"); e.registry.RefreshParticipants(); Call(e.session, "Update");
                     Call(e.lobby, "Update"); Call(e.components.OfType<ExperimentLobbyUI>().Single(), "Update"); Call(e.manager, "Update"); Call(e.placements, "Update"); Call(e.agreement, "Update");
                     Set(e.shared, "nextInitializationAttempt", 0f); Call(e.shared, "Update");
-                    Call(e.submission, "Update"); Call(e.privateBoard, "Update"); Call(e.answers, "LateUpdate");
+                    Call(e.submission, "Update"); Call(e.privateBoard, "Update"); Call(e.answers, "LateUpdate"); e.session.EnsureResetUI().Refresh();
                     Set(e.reveal, "nextAttempt", 0f); Call(e.reveal, "LateUpdate"); Call(e.agreement, "LateUpdate");
                     Deliver(e);
                 }
@@ -55,6 +55,7 @@ public static class PilotCardSetVerification
             foreach (var line in File.ReadAllLines("coplace_pilot_kit/metadata/card_manifest.csv").Skip(1).Where(l => l.Length > 0))
                 Check(font.HasCharacters(line.Split(',')[2]), "Reveal font contains display name " + line.Split(',')[1]);
             Tick(3);
+            var savedCsv = new Dictionary<string, byte[]>();
             foreach (var set in new[] { PilotCardSetController.CardSet.A, PilotCardSetController.CardSet.B, PilotCardSetController.CardSet.Development })
             foreach (bool proposed in new[] { false, true })
             {
@@ -62,7 +63,13 @@ public static class PilotCardSetVerification
                 Set(Sets(exp), "nextSessionSet", set);
                 // Deliberately conflicting Participant Inspector selection must have no effect.
                 Set(Sets(a), "nextSessionSet", set == PilotCardSetController.CardSet.A ? PilotCardSetController.CardSet.B : PilotCardSetController.CardSet.A);
-                Check(exp.session.StartNewSession(), label + " reset request accepted"); Deliver(exp); Tick(14);
+                var reset = exp.session.EnsureResetUI();
+                ((UnityEngine.UI.Button)reset.GetType().GetField("resetButton", Flags).GetValue(reset)).onClick.Invoke();
+                Check(reset.IsConfirmationOpen && !exp.session.IsResettingSession, label + " UI confirmation preserves current Session");
+                ((UnityEngine.UI.Button)reset.GetType().GetField("confirmButton", Flags).GetValue(reset)).onClick.Invoke(); reset.ConfirmReset();
+                Check(exp.session.IsResettingSession && !reset.CanReset, label + " UI Reset accepted once and locks pending ACK"); Deliver(exp); Tick(14);
+                reset.Refresh(); Check(reset.CanReset && reset.StatusMessage.StartsWith("Reset complete"), label + " UI reports all-client Reset completion");
+                Check(savedCsv.All(pair => File.ReadAllBytes(pair.Key).SequenceEqual(pair.Value)), label + " previous Session CSV bytes preserved after Reset");
                 Check(group.All(e => !e.session.IsResettingSession && e.session.CurrentCardSetId == set.ToString() && Sets(e).ActiveSetId == set.ToString()), label + " common set applied before reset ACK");
                 string prefix = set == PilotCardSetController.CardSet.Development ? "Card_" : set.ToString();
                 int count = set == PilotCardSetController.CardSet.Development ? 3 : 8;
@@ -118,6 +125,7 @@ public static class PilotCardSetVerification
                 string setLog = Path.Combine(logRoot, exp.session.CurrentSessionId, "card_set.csv");
                 Check(File.Exists(setLog) && ExperimentCsvLogStore.ReadCsv(setLog)[1][1] == set.ToString(), label + " logs immutable card set in additive sidecar");
                 Check(ExperimentCsvLogStore.ReadCsv(Path.Combine(logRoot, exp.session.CurrentSessionId, "phase_events.csv"))[0].SequenceEqual(ExperimentCsvLogStore.EventColumns), label + " existing phase CSV schema preserved");
+                foreach (string file in Directory.GetFiles(Path.Combine(logRoot, exp.session.CurrentSessionId), "*.csv")) savedCsv[file] = File.ReadAllBytes(file);
                 Capture(a, label.Replace('/', '-'));
             }
             report.passed = true;

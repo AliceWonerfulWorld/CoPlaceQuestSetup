@@ -1,0 +1,26 @@
+{
+    "passed": true,
+    "checks": [
+        "Awake initializes fallback to the actual non-origin pose before any grab",
+        "Disabling interaction before first placement retains position and unit rotation",
+        "Initial disable emits no native Rigidbody quaternion errors",
+        "Forced initial placement accepts the explicit Unclassified slot",
+        "Forced initial placement reaches the explicit slot with a valid rotation",
+        "Forced initial placement never restores or reads the invalid legacy fallback",
+        "Initial placement preserves the board interaction lock",
+        "Reset/forced reposition moves directly to the next slot",
+        "Forced reposition releases the previous slot",
+        "Initially hidden card receives its explicit snap Transform without a fallback restore",
+        "Activating an initialized hidden card synchronizes the Rigidbody to the snap pose",
+        "Hidden-card initialization and activation emit no Unity errors",
+        "Unavailable first slot safely preserves the captured initial pose",
+        "Rejected forced placement restores the previous interaction enable state",
+        "Failed placement emits no quaternion errors",
+        "Cancel without a prior Tier restores the real initial pose, not the origin",
+        "Actual grab/cancel fallback still restores the captured grab pose",
+        "All isolated startup/reset/cancel scenarios emit no Unity errors",
+        "Real-scene startup and existing pilot flow checks emit no Unity errors"
+    ],
+    "errors": [],
+    "failure": ""
+}

@@ -50,6 +50,6 @@ public class ExperimentResultUI : MonoBehaviour
     public void NewSessionFromUI()
     {
         if (!IsVisible || participantRegistry == null || !participantRegistry.IsLocalExperimenter || sessionManager == null) return;
-        if (sessionManager.StartNewSession()) Hide();
+        sessionManager.RequestResetFromUI();
     }
 }

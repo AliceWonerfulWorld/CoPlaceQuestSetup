@@ -28,7 +28,12 @@ public static class ExperimentResultVerification
             var exp = ProposedRevealVerification.CreateEndpoint(99, 2); endpoints.Add(exp);
             var group = endpoints.ToArray();
             Set(exp.registry, "localRole", ExperimentParticipantRegistry.ClientRole.Experimenter); Call(exp.registry, "Update");
-            foreach (var e in group) Set(e.manager, "lobby", e.lobby);
+            foreach (var e in group)
+            {
+                Set(e.manager, "lobby", e.lobby);
+                // This legacy fixture intentionally uses the three development card IDs.
+                Set(e.components.OfType<PilotCardSetController>().Single(), "nextSessionSet", PilotCardSetController.CardSet.Development);
+            }
             if (logRoot != null) foreach (var e in group)
             {
                 var logger = e.components.OfType<ExperimentLogger>().Single();
@@ -49,6 +54,7 @@ public static class ExperimentResultVerification
                     Call(e.components.OfType<ExperimentLobbyUI>().Single(), "Update"); Call(e.components.OfType<FinalAgreementUI>().Single(), "Update");
                     Call(e.answers, "LateUpdate"); Set(e.reveal, "nextAttempt", 0f); Call(e.reveal, "LateUpdate"); Call(e.agreement, "LateUpdate");
                     e.components.OfType<ExperimentResultUI>().Single().Refresh();
+                    e.session.EnsureResetUI().Refresh();
                     Deliver(e);
                 }
             }
@@ -92,7 +98,7 @@ public static class ExperimentResultVerification
             exp.lobby.SelectNormal(); Deliver(exp); Tick(2);
             Check(group.All(e => e.manager.CurrentMode == ExperimentManager.ExperimentMode.Normal &&
                 ((TMP_Text)Get(UI(e), "modeDescription")).text == ExperimentLobbyUI.NormalDescription), "Normal mode and Japanese explanation update on every endpoint");
-            exp.lobby.NewSessionFromUI(); Deliver(exp); Tick(12);
+            exp.lobby.NewSessionFromUI(); exp.session.EnsureResetUI().ConfirmReset(); Deliver(exp); Tick(12);
             Check(group.All(e => !e.session.IsResettingSession && e.session.SessionEpoch == 1 && e.lobby.IsLobbyVisible), "New Session completes existing Reset ACK while keeping every client in Lobby");
             Check(exp.lobby.CanStart && !a.lobby.CanStart && !b.lobby.CanStart, "Only Experimenter can Start when Session and cohort are ready");
             exp.Peer(2, ExperimentParticipantRegistry.RoleVariable, "Experimenter"); exp.registry.RefreshParticipants(); Call(UI(exp), "Update");
@@ -155,14 +161,40 @@ public static class ExperimentResultVerification
             CaptureResult(a, "NormalParticipant.png"); CaptureResult(exp, "NormalExperimenter.png");
             Call(b.lobby, "ClearLocal"); Call(b.lobby, "Update");
             Check(b.lobby.IsExperimentStarted && b.manager.CurrentState == ExperimentManager.ExperimentState.Confirmed, "Same Session reconnect restores Start without resetting confirmed flow");
+            var resetUI = exp.session.EnsureResetUI();
+            Result(a).NewSessionFromUI(); a.session.EnsureResetUI().RequestConfirmation();
+            Check(!a.session.EnsureResetUI().IsConfirmationOpen && !a.session.ResetSession(), "Participant cannot open confirmation or invoke Reset directly");
+            string oldId = exp.session.CurrentSessionId;
             Result(exp).NewSessionFromUI();
-            Check(!Result(exp).IsVisible, "Manual Result New Session hides Result immediately");
+            Check(resetUI.IsConfirmationOpen && !exp.session.IsResettingSession && Result(exp).IsVisible, "Result Reset opens confirmation without clearing results");
+            resetUI.CancelReset(); resetUI.ConfirmReset();
+            Check(exp.session.CurrentSessionId == oldId && !exp.session.IsResettingSession, "Cancel and stale confirm preserve current Session");
+            if (logRoot != null)
+            {
+                var logger = exp.components.OfType<ExperimentLogger>().Single();
+                var savedStore = Get(logger, "store");
+                string blocked = Path.Combine(logRoot, "blocked-reset-root"); File.WriteAllText(blocked, "not a directory");
+                Set(logger, "store", new ExperimentCsvLogStore(blocked));
+                logger.RecordEvent("BOARD_CONFIRMED", oldId + ":BOARD_CONFIRMED");
+                Result(exp).NewSessionFromUI(); resetUI.ConfirmReset();
+                Check(exp.session.CurrentSessionId == oldId && !exp.session.IsResettingSession && resetUI.StatusMessage.Contains("CSV save failed"),
+                    "Unsaved CSV blocks Reset and UI reports failure without replacing Session");
+                Set(logger, "store", savedStore);
+                Check(logger.TryFlushBeforeReset(), "Pending old-Session CSV can be flushed safely after storage recovery");
+                File.Delete(blocked);
+            }
+            Result(exp).NewSessionFromUI(); resetUI.ConfirmReset(); resetUI.ConfirmReset();
+            Check(exp.session.IsResettingSession && !resetUI.CanReset && !resetUI.IsConfirmationOpen && !exp.session.ResetSession(), "Confirm locks immediately and rejects duplicate UI/API Reset");
+            Result(exp).Refresh();
+            Check(!Result(exp).IsVisible, "Confirmed Reset hides Result immediately");
             exp.manager.SetMode(ExperimentManager.ExperimentMode.Proposed);
             Check(!exp.manager.CanChangeMode && group.All(e => !e.placements.CanLocalEditSharedBoard),
                 "Session Reset blocks Mode changes and Participant placement");
             Deliver(exp); Tick(12);
             Check(group.All(e => e.lobby.IsLobbyVisible && !e.agreement.IsBoardConfirmed && !e.submission.IsLocalSubmitted && e.manager.CurrentState == ExperimentManager.ExperimentState.Idle),
                 "Reset returns to Lobby and clears Ready/Confirmed/Submit/State");
+            resetUI.Refresh();
+            Check(resetUI.CanReset && resetUI.StatusMessage.StartsWith("Reset complete"), "Reset UI reports completed ACK and unlocks for next trial");
             Check(group.All(e => !Result(e).IsVisible), "Normal Reset clears Result on all endpoints");
             exp.lobby.SelectProposed(); Deliver(exp); Tick(2);
             Check(group.All(e => e.manager.CurrentMode == ExperimentManager.ExperimentMode.Proposed &&
@@ -192,7 +224,7 @@ public static class ExperimentResultVerification
                 "Proposed Confirmed shows Result alongside readonly Initial Answers and locked Main");
             CaptureResult(a, "ProposedParticipant.png");
             string previousStart = exp.net.GetGlobalVariable(ExperimentLobbyController.StartVariable);
-            exp.lobby.NewSessionFromUI(); Deliver(exp); Tick(12);
+            exp.lobby.NewSessionFromUI(); exp.session.EnsureResetUI().ConfirmReset(); Deliver(exp); Tick(12);
             Check(group.All(e => e.lobby.IsLobbyVisible && e.view.DisplayedParticipantCount == 0 && Main(e).All(c => c.CurrentTier == "Unclassified")),
                 "Reset after Proposed removes references, clears Main and returns all clients to Lobby");
             Check(group.All(e => !Result(e).IsVisible), "Proposed Reset removes Result on every endpoint");

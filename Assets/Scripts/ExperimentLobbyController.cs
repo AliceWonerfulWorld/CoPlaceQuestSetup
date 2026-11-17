@@ -107,7 +107,7 @@ public class ExperimentLobbyController : MonoBehaviour
         return true;
     }
     public void StartFromUI() => StartExperiment();
-    public void NewSessionFromUI() { if (CanNewSession) sessionManager.StartNewSession(); }
+    public void NewSessionFromUI() { if (CanNewSession) sessionManager.RequestResetFromUI(); }
     public void SelectNormal() { if (experimentManager != null) experimentManager.SetMode(ExperimentManager.ExperimentMode.Normal); }
     public void SelectProposed() { if (experimentManager != null) experimentManager.SetMode(ExperimentManager.ExperimentMode.Proposed); }
 }

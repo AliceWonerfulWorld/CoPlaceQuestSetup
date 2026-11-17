@@ -124,6 +124,13 @@ public sealed class ExperimentLogger : MonoBehaviour
         Drain();
         return true; // Accepted for saving; LastError reports pending IO failure.
     }
+    // Preserve queued observations with their original Session IDs before replacing Session control.
+    public bool TryFlushBeforeReset()
+    {
+        CaptureSnapshot();
+        Drain();
+        return pending.Count == 0 && string.IsNullOrEmpty(LastError);
+    }
     private void Drain()
     {
         if (!CanWrite || pending.Count == 0) return;

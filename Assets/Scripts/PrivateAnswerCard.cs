@@ -15,7 +15,7 @@ public class PrivateAnswerCard : MonoBehaviour, IXRSelectFilter
     private TierZone currentZone, hoveredZone;
     private bool suppressRelease;
     private Vector3 grabStartPosition;
-    private Quaternion grabStartRotation;
+    private Quaternion grabStartRotation = Quaternion.identity;
     public TierZone PreviewDropTarget => hoveredZone;
     public void ConfigureId(string id) => cardId = id;
     public string CardId => cardId;
@@ -29,6 +29,7 @@ public class PrivateAnswerCard : MonoBehaviour, IXRSelectFilter
     {
         if (body != null) return;
         body = GetComponent<Rigidbody>();
+        grabStartPosition = transform.position; grabStartRotation = transform.rotation;
         grab = GetComponent<XRGrabInteractable>();
         grab.selectFilters.Add(this);
         grab.selectEntered.AddListener(OnGrabbed);
@@ -75,14 +76,15 @@ public class PrivateAnswerCard : MonoBehaviour, IXRSelectFilter
         if (suppressRelease) return;
         if (zone == null || !board.TryPlaceCard(cardId, zone.tierName)) RestorePosition();
     }
-    public void SetInteractionEnabled(bool enabled)
+    public void SetInteractionEnabled(bool enabled) => SetInteractionState(enabled, true);
+    private void SetInteractionState(bool enabled, bool restorePosition)
     {
         if (!enabled) ClearHover();
         if (grab == null || grab.enabled == enabled) return;
         suppressRelease = true;
         grab.enabled = enabled;
         suppressRelease = false;
-        if (!enabled) { ClearHover(); RestorePosition(); }
+        if (!enabled && restorePosition) RestorePosition();
     }
     public bool CanPlace(TierZone zone) => zone != null && zone.PeekAvailableSnapPoint(gameObject) != null;
     public bool ApplyPlacement(TierZone zone, bool forceRelease = false)
@@ -90,9 +92,15 @@ public class PrivateAnswerCard : MonoBehaviour, IXRSelectFilter
         if (body == null) Awake();
         if (zone == null || (!forceRelease && IsHeld)) return false;
         bool wasEnabled = grab != null && grab.enabled;
-        if (forceRelease) SetInteractionEnabled(false);
+        // Reset/first placement already has an explicit destination. Disabling XR must not
+        // restore a previous pose before that destination has been assigned.
+        if (forceRelease) SetInteractionState(false, false);
         Transform point = zone.GetAvailableSnapPoint(gameObject);
-        if (point == null) { if (forceRelease) SetInteractionEnabled(wasEnabled); return false; }
+        if (point == null)
+        {
+            if (forceRelease) { RestorePosition(); SetInteractionEnabled(wasEnabled); }
+            return false;
+        }
         if (currentZone != null && currentZone != zone) currentZone.ReleaseCard(gameObject);
         currentZone = zone;
         ClearHover(); MoveTo(point);
