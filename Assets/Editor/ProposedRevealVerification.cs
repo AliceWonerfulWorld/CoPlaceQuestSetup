@@ -219,6 +219,10 @@ public static class ProposedRevealVerification
         Call(e.submission, "OnEnable"); Call(e.placements, "Start"); Call(e.agreement, "Start"); Call(e.shared, "OnEnable");
         Call(e.privateBoard, "OnEnable"); Call(e.privateBoard, "Start"); Call(e.privateBoard, "Update");
         Call(e.reveal, "OnEnable"); Call(e.view, "OnEnable"); Call(e.view, "Start");
+        // Every offline endpoint uses an isolated test root; fail-closed Reset requires its Logger.
+        var logger = One<ExperimentLogger>();
+        Set(logger, "outputRootOverride", System.IO.Path.GetFullPath("Library/ProposedRevealVerification/Logs/" + Guid.NewGuid().ToString("N")));
+        Call(logger, "OnEnable"); Call(logger, "Start");
         // Existing development scenarios exercise the three active food cards.
         if (!includeInactiveCards) e.components = e.components.Where(c =>
             !(c is CardTierDetector || c is PrivateAnswerCard) || c.gameObject.activeSelf).ToArray();

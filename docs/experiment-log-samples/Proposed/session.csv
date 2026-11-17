@@ -1,0 +1,2 @@
+﻿"schema_version","session_id","condition","session_epoch","first_observed_utc","experiment_started_observed_utc","board_confirmed_observed_utc","reset_started_observed_utc","reset_completed_observed_utc","participants_at_start","time_basis"
+"1","5d2f59b0c37f4c2ba82e517098a29935","Proposed","2","2026-11-17T14:25:08.3146530+00:00","2026-11-17T14:25:08.4026290+00:00","2026-11-17T14:25:08.6690920+00:00","2026-11-17T14:25:08.3162220+00:00","2026-11-17T14:25:08.3714910+00:00","1;2","experimenter_observation_utc; elapsed=local_monotonic_since_first_session_observation"

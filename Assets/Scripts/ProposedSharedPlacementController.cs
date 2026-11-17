@@ -17,6 +17,7 @@ public class ProposedSharedPlacementController : MonoBehaviour
     private string observedRevealId;
     private float nextInitializationAttempt;
     private bool active;
+    public event Action<string> OnSharedClassificationStarted;
     public bool IsActive => active && ContextReady;
     public string AgreementId => string.IsNullOrEmpty(observedRevealId) ? null : "proposed:" + observedRevealId;
     private NetSyncManager Network => participantRegistry != null ? participantRegistry.Network : null;
@@ -68,6 +69,7 @@ public class ProposedSharedPlacementController : MonoBehaviour
                 placementSync.RestoreSessionPlacements();
                 finalAgreement.RestoreSessionAgreement();
                 if (!finalAgreement.IsBoardConfirmed) experimentManager.SetState(ExperimentManager.ExperimentState.Discussion);
+                OnSharedClassificationStarted?.Invoke(revealId);
                 Debug.Log($"[Proposed Shared Board] Enabled Main placement / Reveal {revealId}", this);
             }
             return;

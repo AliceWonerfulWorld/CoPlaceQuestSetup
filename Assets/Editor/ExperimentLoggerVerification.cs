@@ -88,9 +88,11 @@ public static class ExperimentLoggerVerification
             foreach (var rows in startedSessions)
             {
                 string condition = rows[1][2];
-                Check(rows.Skip(1).Select(r => r[3]).OrderBy(x => x).SequenceEqual(new[] { "BOARD_CONFIRMED", "EXPERIMENT_STARTED", "SESSION_CREATED", "SESSION_RESET_COMPLETED", "SESSION_RESET_STARTED" }), condition + ": all five phase events are saved exactly once including reconnect");
-                Check(rows.Skip(1).All(r => r[1] == rows[1][1] && r[2] == condition && r[6] == "" && r[9] == "99"), condition + ": Session, Condition, observer and non-participant phase semantics are consistent");
-                Check(rows.Skip(1).Select(r => r[7]).Distinct().Count() == 5, condition + ": Event IDs are unique");
+                var expectedEvents = new List<string> { "BOARD_CONFIRMED", "EXPERIMENT_STARTED", "SESSION_CREATED", "SESSION_RESET_COMPLETED", "SESSION_RESET_STARTED" };
+                if (condition == "Proposed") expectedEvents.AddRange(new[] { "PARTICIPANT_SUBMITTED", "PARTICIPANT_SUBMITTED", "ANSWERS_REVEALED", "SHARED_CLASSIFICATION_STARTED" });
+                Check(rows.Skip(1).Select(r => r[3]).OrderBy(x => x).SequenceEqual(expectedEvents.OrderBy(x => x)), condition + ": phase events are saved exactly once including reconnect");
+                Check(rows.Skip(1).All(r => r[1] == rows[1][1] && r[2] == condition && (r[6] == "" || r[6].StartsWith("client:")) && r[9] == "99"), condition + ": Session, Condition, observer and non-participant phase semantics are consistent");
+                Check(rows.Skip(1).Select(r => r[7]).Distinct().Count() == expectedEvents.Count, condition + ": Event IDs are unique");
                 var parsedElapsed = rows.Skip(1).Select(r => double.Parse(r[5], CultureInfo.InvariantCulture)).ToArray();
                 Check(parsedElapsed.SequenceEqual(parsedElapsed.OrderBy(x => x)), condition + ": elapsed times are nondecreasing");
             }

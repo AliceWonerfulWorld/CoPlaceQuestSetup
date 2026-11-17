@@ -51,7 +51,7 @@ public class ExperimentSessionManager : MonoBehaviour
     public ExperimentManager.ExperimentMode SessionMode => control != null && control.mode == "Normal" ? ExperimentManager.ExperimentMode.Normal : ExperimentManager.ExperimentMode.Proposed;
     public bool IsResettingSession { get; private set; }
     public string LastFailure { get; private set; } = "";
-    public string LogSaveFailure => experimentManager != null ? experimentManager.GetComponent<ExperimentLogger>()?.LastError ?? "" : "";
+    public string LogSaveFailure => experimentManager != null ? experimentManager.GetComponent<ExperimentLogger>()?.LastError ?? "ExperimentLogger is missing" : "";
     public event Action<string> OnSessionResetStarted;
     public event Action<string> OnSessionStarted;
     private void Start() { started = true; Subscribe(); if (!Application.isMobilePlatform) EnsureResetUI(); }
@@ -308,7 +308,7 @@ public class ExperimentSessionManager : MonoBehaviour
         if (normalPlacementSync == null || finalAgreement == null || candidateSync == null || experimentManager == null) { Fail("Session component references are missing"); return false; }
         if (!normalPlacementSync.HasUnclassifiedZone) { Fail("Unclassified TierZone is missing"); return false; }
         var logger = experimentManager.GetComponent<ExperimentLogger>();
-        if (logger != null && !logger.TryFlushBeforeReset()) { Fail("CSV save failed; Reset blocked: " + logger.LastError); return false; }
+        if (logger == null || !logger.TryFlushBeforeReset()) { Fail("CSV save failed; Reset blocked: " + (logger != null ? logger.LastError : "ExperimentLogger is missing")); return false; }
         Debug.Log($"[Session Reset Start] Previous Session: {CurrentSessionId}");
         var next = new Control { id = Guid.NewGuid().ToString("N"), startedAt = DateTime.UtcNow.ToString("o"), phase = "resetting", owner = network.ClientNo, mode = experimentManager.CurrentMode.ToString(), cardSetId = cardSets != null ? cardSets.NextSessionSetId : "Development", epoch = SessionEpoch + 1 };
         // Local operations stop immediately while waiting for the Room echo.
@@ -317,6 +317,7 @@ public class ExperimentSessionManager : MonoBehaviour
         LastFailure = "";
         IsResettingSession = true;
         if (!network.SetGlobalVariable(ControlVariable, JsonUtility.ToJson(next))) { pendingSessionRequestId = null; IsResettingSession = control != null && control.phase == "resetting"; Fail("Reset notification send failed"); return false; }
+        logger.MarkResetAccepted();
         Debug.Log($"[New Session] Session ID: {next.id}");
         return true;
     }

@@ -17,6 +17,59 @@ public sealed class ExperimentCsvLogStore
         public long Epoch;
         public DateTimeOffset ObservedAtUtc;
         public double MonotonicSeconds;
+        public FinalPlacement[] FinalPlacements;
+        public IndependentAnswer[] IndependentAnswers;
+        public string SnapshotId;
+    }
+    public sealed class FinalPlacement { public string CardId, Tier; }
+    public sealed class IndependentAnswer { public int ClientId; public string CardId, Tier, SelectedAt, SubmissionId; }
+    public static readonly string[] FinalColumns = { "schema_version", "session_id", "session_epoch", "condition", "card_set_id", "card_id", "final_tier", "observed_time_utc" };
+    public static readonly string[] IndependentColumns = { "schema_version", "session_id", "session_epoch", "condition", "card_set_id", "participant_client_id", "card_id", "initial_tier", "selected_at_utc", "observed_time_utc", "reveal_snapshot_id", "submission_id" };
+    private static bool IsTier(string tier) => tier == "A" || tier == "B" || tier == "C" || tier == "D" || tier == "E";
+    private void SaveSnapshots(Observation e)
+    {
+        if (e.FinalPlacements == null && e.IndependentAnswers == null) return;
+        if (e.Epoch <= 0 || string.IsNullOrEmpty(e.CardSetId) || (e.Condition != "Normal" && e.Condition != "Proposed")) throw new InvalidDataException("Snapshot metadata missing");
+        string[] Prefix() => new[] { "1", e.SessionId, e.Epoch.ToString(CultureInfo.InvariantCulture), e.Condition, e.CardSetId };
+        string observed = e.ObservedAtUtc.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture);
+        if (e.FinalPlacements != null)
+        {
+            if (e.EventType != "BOARD_CONFIRMED" || e.FinalPlacements.Length == 0 || e.FinalPlacements.Any(r => r == null || string.IsNullOrEmpty(r.CardId) || !IsTier(r.Tier)) || e.FinalPlacements.Select(r => r.CardId).Distinct().Count() != e.FinalPlacements.Length) throw new InvalidDataException("Invalid final placements");
+            var rows = e.FinalPlacements.OrderBy(r => r.CardId, StringComparer.Ordinal).Select(r => Prefix().Concat(new[] { r.CardId, r.Tier, observed }).ToArray());
+            SaveImmutable(Path.Combine(root, e.SessionId, "final_placements.csv"), FinalColumns, rows, 7);
+        }
+        if (e.IndependentAnswers != null)
+        {
+            if (e.Condition != "Proposed" || e.EventType != "ANSWERS_REVEALED" || string.IsNullOrEmpty(e.SnapshotId) || e.IndependentAnswers.Length == 0 ||
+                e.IndependentAnswers.Any(r => r == null || r.ClientId <= 0 || string.IsNullOrEmpty(r.CardId) || string.IsNullOrEmpty(r.SubmissionId) || !IsTier(r.Tier) ||
+                    !DateTime.TryParseExact(r.SelectedAt, "o", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var time) || time.Kind != DateTimeKind.Utc) ||
+                e.IndependentAnswers.Select(r => r.ClientId + ":" + r.CardId).Distinct().Count() != e.IndependentAnswers.Length)
+                throw new InvalidDataException("Invalid revealed answers");
+            var cards = new HashSet<string>(e.IndependentAnswers.Where(r => r.ClientId == e.IndependentAnswers[0].ClientId).Select(r => r.CardId));
+            if (e.IndependentAnswers.GroupBy(r => r.ClientId).Any(g => !cards.SetEquals(g.Select(r => r.CardId)) || g.Select(r => r.SubmissionId).Distinct().Count() != 1)) throw new InvalidDataException("Incomplete independent answer matrix");
+            var rows = e.IndependentAnswers.OrderBy(r => r.ClientId).ThenBy(r => r.CardId, StringComparer.Ordinal).Select(r => Prefix().Concat(new[] {
+                r.ClientId.ToString(CultureInfo.InvariantCulture), r.CardId, r.Tier, r.SelectedAt, observed, e.SnapshotId, r.SubmissionId }).ToArray());
+            SaveImmutable(Path.Combine(root, e.SessionId, "independent_answers.csv"), IndependentColumns, rows, 9);
+        }
+    }
+    // Ignore only the observation time on duplicate restoration. Every answer/identity must agree.
+    private static void SaveImmutable(string path, string[] columns, IEnumerable<string[]> values, int timeColumn)
+    {
+        var wanted = new[] { columns }.Concat(values).ToList();
+        if (File.Exists(path))
+        {
+            var saved = ReadCsv(path);
+            if (saved.Count != wanted.Count || !saved[0].SequenceEqual(columns) || saved.Skip(1).Where((r, i) =>
+                r.Length != columns.Length || !r.Where((v, c) => c != timeColumn).SequenceEqual(wanted[i + 1].Where((v, c) => c != timeColumn))).Any())
+                throw new InvalidDataException("Immutable snapshot conflicts with saved CSV: " + path);
+            return;
+        }
+        Directory.CreateDirectory(Path.GetDirectoryName(path));
+        // Never replace an existing result, including a concurrent writer's result.
+        string temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try { WriteAtomic(temporary, wanted); File.Move(temporary, path); }
+        finally { if (File.Exists(temporary)) File.Delete(temporary); }
+
     }
 
     public static readonly string[] EventColumns = {
@@ -58,6 +111,13 @@ public sealed class ExperimentCsvLogStore
             rows.RemoveAt(0);
             if (rows.Any(r => r[1] != entry.SessionId)) throw new InvalidDataException("Mixed Session IDs in " + eventPath);
         }
+        if (rows.Any(r => r[8] != entry.Epoch.ToString(CultureInfo.InvariantCulture))) throw new InvalidDataException("Session Epoch mismatch");
+        string setPathBeforeWrite = Path.Combine(folder, "card_set.csv");
+        if (File.Exists(setPathBeforeWrite) && !string.IsNullOrEmpty(entry.CardSetId))
+        {
+            var savedSet = ReadCsv(setPathBeforeWrite);
+            if (savedSet.Count != 2 || savedSet[1].Length != 2 || savedSet[1][0] != entry.SessionId || savedSet[1][1] != entry.CardSetId) throw new InvalidDataException("Card set changed within Session");
+        }
         if (!origins.TryGetValue(entry.SessionId, out double? origin))
         {
             // A restarted logger has no trustworthy monotonic origin for an existing Session.
@@ -68,10 +128,14 @@ public sealed class ExperimentCsvLogStore
         string condition = rows.Select(r => r[2]).FirstOrDefault(c => !string.IsNullOrEmpty(c)) ?? "";
         if (!string.IsNullOrEmpty(entry.Condition))
         {
-            if (entry.EventType != "EXPERIMENT_STARTED") throw new ArgumentException("Only a confirmed Experiment Start may set Condition");
+            if (entry.EventType != "EXPERIMENT_STARTED" && entry.FinalPlacements == null && entry.IndependentAnswers == null) throw new ArgumentException("Only a confirmed Experiment Start may set Condition");
+            if (entry.EventType != "EXPERIMENT_STARTED" && condition != entry.Condition) throw new InvalidDataException("Snapshot requires matching saved Experiment Start");
             if (condition != "" && condition != entry.Condition) throw new InvalidDataException("Condition changed within a Session");
             condition = entry.Condition;
         }
+        // Persist immutable answers before acknowledging their phase event as saved.
+        if ((entry.FinalPlacements != null || entry.IndependentAnswers != null) && condition != entry.Condition) throw new InvalidDataException("Snapshot Condition mismatch");
+        SaveSnapshots(entry);
         if (!duplicate)
         {
             string elapsed = origin.HasValue ? Math.Max(0, entry.MonotonicSeconds - origin.Value).ToString("F6", CultureInfo.InvariantCulture) : "";

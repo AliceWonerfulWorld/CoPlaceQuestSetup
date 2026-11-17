@@ -26,6 +26,7 @@ public class FinalAgreementManager : MonoBehaviour
     private readonly Dictionary<string, string> finalPlacements = new Dictionary<string, string>();
     public event Action OnStatusChanged;
     public event Action<IReadOnlyDictionary<string, string>> OnBoardConfirmed;
+    public IReadOnlyCollection<string> ExpectedCardIds => placementSync.CardIds;
     public bool IsBoardConfirmed { get; private set; }
     public string StatusMessage { get; private set; } = "";
     public bool IsNormalPhase => experimentManager != null && experimentManager.CurrentMode == ExperimentManager.ExperimentMode.Normal;
