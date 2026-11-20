@@ -58,10 +58,16 @@ public static class ExperimentResultSetup
         label.alignment = TextAlignmentOptions.Center;
         UnityEventTools.AddPersistentListener(button.onClick, ui.NewSessionFromUI); Set(ui, "newSessionButton", button);
         admin.gameObject.SetActive(false); content.gameObject.SetActive(false);
+        ParticipantUISetup.ApplyPresentation(root.transform);
         EditorSceneManager.MarkSceneDirty(scene); EditorSceneManager.SaveScene(scene);
         Debug.Log("[Result UI Setup] Above existing Main board; Confirmed / Waiting with manual Experimenter reset");
     }
     private static TMP_FontAsset ResultFont()
+    {
+        ParticipantUISetup.UpdateFont();
+        return AssetDatabase.LoadAssetAtPath<TMP_FontAsset>("Assets/Resources/ParticipantJapanese SDF.asset");
+    }
+    private static TMP_FontAsset LegacyFont()
     {
         const string path = "Assets/Fonts/IndependentAnswer/ResultJapanese SDF.asset";
         string glyphs = ExperimentResultUI.Title + ExperimentResultUI.Message + ExperimentResultUI.Waiting +

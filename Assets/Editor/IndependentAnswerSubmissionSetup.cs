@@ -28,7 +28,8 @@ public static class IndependentAnswerSubmissionSetup
         Set(submission, "sessionManager", session); Set(submission, "revealCoordinator", reveal); Set(submission, "privateBoard", board);
         Set(board, "independentSubmission", submission); Set(answers, "independentSubmission", submission); Set(reveal, "independentSubmission", submission);
 
-        const string fontPath = "Assets/Fonts/IndependentAnswer/SubmitJapanese SDF.asset";
+        ParticipantUISetup.UpdateFont();
+        const string fontPath = "Assets/Resources/ParticipantJapanese SDF.asset";
         var font = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(fontPath);
         if (font == null)
         {
@@ -64,7 +65,7 @@ public static class IndependentAnswerSubmissionSetup
             UnityEditor.Events.UnityEventTools.AddPersistentListener(button.onClick, ui.ToggleSubmission);
             foreach (var text in new[] { status, label })
             { text.font = font; text.fontSize = 42; text.fontStyle = FontStyles.Bold; text.raycastTarget = false; }
-            status.text = "すべてのカードを配置してください"; label.text = "この回答で確定"; button.interactable = false;
+            status.text = "すべてのカードを配置してください"; label.text = "回答を提出"; button.interactable = false;
             ((RectTransform)panel.transform).sizeDelta = new Vector2(920, 430);
             var privateCanvas = content.GetComponentsInChildren<Canvas>(true).Single(c => c.name == "TierBoardCanvas");
             panel.transform.SetPositionAndRotation(privateCanvas.transform.TransformPoint(new Vector3(2350, 0, -80)), privateCanvas.transform.rotation);
@@ -75,6 +76,7 @@ public static class IndependentAnswerSubmissionSetup
         var panelRect = (RectTransform)ui.transform;
         panelRect.anchoredPosition3D = content.InverseTransformPoint(boardCanvas.transform.TransformPoint(new Vector3(2350, 0, -80)));
         panelRect.localRotation = Quaternion.Inverse(content.rotation) * boardCanvas.transform.rotation;
+        ParticipantUISetup.ApplyPresentation(board.transform);
         EditorSceneManager.MarkSceneDirty(scene); EditorSceneManager.SaveScene(scene);
         Debug.Log("[Independent Submit Setup] Private consent + Japanese Submit/Cancel UI saved");
     }

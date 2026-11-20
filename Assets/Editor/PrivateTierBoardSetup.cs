@@ -96,6 +96,7 @@ public static class PrivateTierBoardSetup
         Set(candidates, "usePrivateAnswerBoard", true);
         SetArray(candidates, "answerCardIds", mainCards.Select(c => c.name).ToArray());
         ImproveReadability(root);
+        ParticipantUISetup.UpdateFont(); ParticipantUISetup.ApplyPresentation(root.transform);
         EditorSceneManager.MarkSceneDirty(scene);
         EditorSceneManager.SaveScene(scene);
         Selection.activeGameObject = root;

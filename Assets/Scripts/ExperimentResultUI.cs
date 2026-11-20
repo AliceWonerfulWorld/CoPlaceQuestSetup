@@ -5,9 +5,9 @@ using UnityEngine;
 [DefaultExecutionOrder(400)]
 public class ExperimentResultUI : MonoBehaviour
 {
-    public const string Title = "FINAL RESULT";
-    public const string Message = "配置が確定しました";
-    public const string Waiting = "実験は終了しました\n実験者の指示があるまでお待ちください";
+    public const string Title = "実験が終了しました";
+    public const string Message = "分類結果が確定しました。";
+    public const string Waiting = "実験者からの次の案内をお待ちください。";
     [SerializeField] private ExperimentManager experimentManager;
     [SerializeField] private ExperimentSessionManager sessionManager;
     [SerializeField] private ExperimentParticipantRegistry participantRegistry;
@@ -32,6 +32,7 @@ public class ExperimentResultUI : MonoBehaviour
     private void LateUpdate() => Refresh();
     public void Refresh()
     {
+        ParticipantUIStyle.Apply(transform);
         bool visible = (participantRegistry == null || !participantRegistry.IsLocalExperimenter) && experimentManager != null &&
             experimentManager.CurrentState == ExperimentManager.ExperimentState.Confirmed &&
             (sessionManager == null || !sessionManager.IsResettingSession);

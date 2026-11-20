@@ -16,6 +16,7 @@ public class PrivateTierBoardController : MonoBehaviour
     [SerializeField] private ProposedRevealCoordinator revealCoordinator;
     [SerializeField] private ProposedSharedPlacementController sharedPlacement;
     [SerializeField] private IndependentAnswerSubmission independentSubmission;
+    public CandidateSyncTest Answers => candidateSync;
     public bool HasHeldCard { get { foreach (var card in cards) if (card != null && card.IsHeld) return true; return false; } }
     [SerializeField] private GameObject contentRoot;
     [SerializeField] private PrivateAnswerCard[] cards;
@@ -114,12 +115,9 @@ public class PrivateTierBoardController : MonoBehaviour
             (experimentManager.CurrentMode == ExperimentManager.ExperimentMode.Proposed && (sharedPlacement == null || !sharedPlacement.IsActive))));
         if (instructions != null)
         {
-            string text = independentSubmission != null && independentSubmission.IsLocalLocked ? "Answers submitted. Waiting for other Participants..." : revealCoordinator != null && revealCoordinator.IsAnswerLocked && !revealCoordinator.HasRevealed ? "All answers complete. Preparing simultaneous reveal..." :
-                CanInteract ? "Only your answers are visible. Grab any card and place it in A-E.\nReturn to Unclassified to cancel."
-                : candidateSync != null && candidateSync.IsIndependentAnswerPhase ? "Waiting for connection / Participant registration" : "YOUR ANSWER - READ ONLY";
-#if UNITY_EDITOR
-            if (CanInteract) text += "\nF1-F8: select card 01-08   |   1-5: A-E   |   0: cancel   |   Selected: " + selectedCardId;
-#endif
+            string text = revealCoordinator != null && revealCoordinator.IsAnswerLocked && !revealCoordinator.HasRevealed ? "全員の回答を公開する準備をしています。" :
+                independentSubmission != null && independentSubmission.IsLocalLocked ? "提出した回答は操作できません。提出取消で変更できます。" :
+                CanInteract ? "画像カードを自分の考えに基づいて分類してください。\n未分類に戻すと、そのカードの回答を取り消せます。" : "接続と実験の準備を待っています。";
             if (instructions.text != text) instructions.text = text;
         }
     }

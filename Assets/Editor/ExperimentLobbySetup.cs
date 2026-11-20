@@ -77,11 +77,17 @@ public static class ExperimentLobbySetup
         foreach (var mode in UnityEngine.Object.FindObjectsByType<ExperimentModeUI>(FindObjectsInactive.Include, FindObjectsSortMode.None))
         { Set(mode, "participantRegistry", registry); Set(mode, "canvas", mode.GetComponent<Canvas>()); }
         admin.gameObject.SetActive(false);
+        ParticipantUISetup.ApplyPresentation(root.transform);
         EditorSceneManager.MarkSceneDirty(scene); EditorSceneManager.SaveScene(scene); Selection.activeGameObject = root;
         Debug.Log("[Lobby Setup] World-space Introduction + separate Experimenter controls saved to QuestSetup");
     }
     public static void RefreshExisting() { Font(); var root=GameObject.Find("ExperimentLobby"); ((RectTransform)root.transform.Find("LobbyContent")).sizeDelta = new Vector2(3000,1500); root.transform.Find("LobbyContent/ExperimenterControls").gameObject.SetActive(false); EditorSceneManager.MarkSceneDirty(root.scene); EditorSceneManager.SaveScene(root.scene); }
     private static TMP_FontAsset Font()
+    {
+        ParticipantUISetup.UpdateFont();
+        return AssetDatabase.LoadAssetAtPath<TMP_FontAsset>("Assets/Resources/ParticipantJapanese SDF.asset");
+    }
+    private static TMP_FontAsset LegacyFont()
     {
         const string path = "Assets/Fonts/IndependentAnswer/LobbyJapanese SDF.asset";
         var font = AssetDatabase.LoadAssetAtPath<TMP_FontAsset>(path);

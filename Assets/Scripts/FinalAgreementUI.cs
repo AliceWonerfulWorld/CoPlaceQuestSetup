@@ -17,26 +17,29 @@ public class FinalAgreementUI : MonoBehaviour
     private void Update()
     {
         if (agreement == null) return;
+        ParticipantUIStyle.Apply(transform);
         canvas.enabled = agreement.IsAgreementPhase && !agreement.IsBoardConfirmed;
         readyButton.interactable = agreement.CanToggleReady && Time.unscaledTime - lastAcceptedClickTime >= ClickCooldownSeconds;
-        string label = agreement.IsBoardConfirmed ? "Board Confirmed" : (agreement.IsLocalReady || agreement.LocalApprovalPending) ? "Cancel Ready" : "This board is OK";
+        string label = agreement.IsBoardConfirmed ? "確定済み" : (agreement.IsLocalReady || agreement.LocalApprovalPending) ? "同意を取り消す" : "この配置に同意する";
         if (buttonText.text != label) buttonText.text = label;
-        var b = new StringBuilder(agreement.IsBoardConfirmed ? "FINAL BOARD CONFIRMED\n" : "FINAL AGREEMENT\n");
-        b.Append("Participants: ").Append(agreement.Participants.Count).Append(" / ").Append(agreement.ExpectedParticipantCount).AppendLine();
+        var b = new StringBuilder(agreement.IsBoardConfirmed ? "分類結果が確定しました。\n" : "最終結果への同意\n全員が同意すると結果が確定します。\n");
+        b.Append("参加者：").Append(agreement.Participants.Count).Append(" / ").Append(agreement.ExpectedParticipantCount).AppendLine();
         foreach (int client in agreement.Participants)
         {
             int displayId = agreement.DisplayId(client);
             var style = participantStyles != null ? participantStyles.GetParticipantStyle(displayId) : null;
-            string name = style != null ? style.label : "P" + displayId;
+            string name = "参加者" + displayId;
             string color = ColorUtility.ToHtmlStringRGB(style != null ? style.color : Color.white);
-            b.Append("<color=#").Append(color).Append('>').Append(name.Replace("<", "").Replace(">", "")).Append("</color>").Append(client == agreement.LocalClientNo ? " (You)  " : "  ")
-                .AppendLine(agreement.IsParticipantReady(client) ? "Ready" : "Waiting");
+            b.Append("<color=#").Append(color).Append('>').Append(name.Replace("<", "").Replace(">", "")).Append("</color>").Append(client == agreement.LocalClientNo ? "（あなた） " : "  ")
+                .AppendLine(client == agreement.LocalClientNo && agreement.LocalApprovalPending ? "同期待ち" : agreement.IsParticipantReady(client) ? "同意済み" : "未同意");
         }
-        if (!agreement.IsLocalParticipant) b.AppendLine("Experimenter: view only");
-        if (!string.IsNullOrEmpty(agreement.StatusMessage)) b.AppendLine(agreement.StatusMessage);
+        if (!agreement.IsLocalParticipant) b.AppendLine("実験者：閲覧専用");
+        if (!agreement.IsConnectionReady) b.AppendLine("未接続：接続を待っています。");
+        if (!string.IsNullOrEmpty(agreement.StatusMessage)) b.AppendLine(agreement.HasUnclassifiedCards ? "未分類のカードをすべて配置してください。" : ParticipantUIStyle.AgreementMessage(agreement.StatusMessage));
+        if (agreement.IsLocalReady) b.AppendLine("他の参加者の同意を待っています。");
         string text = b.ToString(); if (lastText != text) { lastText = text; statusText.text = text; }
         // Fit the panel vertically as participants are added, keeping the same readable font size.
-        float height = Mathf.Max(430, 230 + agreement.Participants.Count * 58 + (!string.IsNullOrEmpty(agreement.StatusMessage) ? 100 : 0));
+        float height = Mathf.Max(540, 320 + agreement.Participants.Count * 58 + (!string.IsNullOrEmpty(agreement.StatusMessage) ? 100 : 0));
         var rect = (RectTransform)transform; rect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, height);
     }
     public void ResetLocalSession() { lastAcceptedClickTime = float.NegativeInfinity; duplicateClickLogged = false; lastText = null; }

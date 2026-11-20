@@ -24,6 +24,7 @@ public class ExperimentLobbyController : MonoBehaviour
     public bool IsExperimenter => participantRegistry != null && participantRegistry.IsLocalExperimenter;
     public int ConnectedParticipants => IsConnected ? participantRegistry.ParticipantClientNos.Count : 0;
     public int ExpectedParticipants => participantRegistry != null ? participantRegistry.ExpectedParticipantCount : 0;
+    public ExperimentSessionManager Session => sessionManager;
     public string SessionId => sessionManager != null ? sessionManager.CurrentSessionId : "";
     public bool IsResetting => sessionManager != null && sessionManager.IsResettingSession;
     public string CurrentState => experimentManager != null ? experimentManager.CurrentState.ToString() : "—";

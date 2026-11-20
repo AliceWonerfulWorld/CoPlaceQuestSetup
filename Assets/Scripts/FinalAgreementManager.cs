@@ -28,6 +28,8 @@ public class FinalAgreementManager : MonoBehaviour
     public event Action<IReadOnlyDictionary<string, string>> OnBoardConfirmed;
     public IReadOnlyCollection<string> ExpectedCardIds => placementSync.CardIds;
     public bool IsBoardConfirmed { get; private set; }
+    public bool IsConnectionReady => network != null && network.IsReady;
+    public bool HasUnclassifiedCards { get { if (placementSync == null) return true; foreach (string id in placementSync.CardIds) if (placementSync.GetCard(id).CurrentTier == "Unclassified") return true; return false; } }
     public string StatusMessage { get; private set; } = "";
     public bool IsNormalPhase => experimentManager != null && experimentManager.CurrentMode == ExperimentManager.ExperimentMode.Normal;
     public bool IsAgreementPhase => placementSync != null && placementSync.IsSharedPlacementPhase;

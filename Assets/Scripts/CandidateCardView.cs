@@ -16,7 +16,8 @@ public class CandidateCardView : MonoBehaviour
     {
         if (participantLabel != null)
         {
-            participantLabel.text = label;
+            participantLabel.text = label != null && label.StartsWith("P") ? "参加者" + label.Substring(1) : label;
+            ParticipantUIStyle.Apply(transform);
             participantLabel.color = new Color(accent.r, accent.g, accent.b, 1f);
         }
         if (frame != null) frame.color = new Color(accent.r, accent.g, accent.b, 0.72f);

@@ -388,19 +388,7 @@ public class CandidateSyncTest : MonoBehaviour
     private void UpdateCandidateDisplay()
     {
         if (candidateStatusText == null) return;
-        var display = new StringBuilder();
-        foreach (var card in revealedCards)
-            foreach (var entry in card.Value) display.AppendLine($"Participant {entry.displayId} : {card.Key} -> Tier {entry.tier} / Answered: True / SelectedAt: {entry.selectedAt}");
-        if (participantRegistry.IsRegisteredParticipant(subscribedManager.ClientNo))
-            foreach (var entry in participantCandidates)
-            {
-                string prefix = subscribedManager.ClientNo + "_";
-                if (!entry.Key.StartsWith(prefix, StringComparison.Ordinal)) continue;
-                string card = entry.Key.Substring(prefix.Length);
-                if (revealedCards.ContainsKey(card)) continue;
-                bool answered = participantAnswered.TryGetValue(entry.Key, out bool value) && value;
-                if (answered && IsValidTier(entry.Value)) display.AppendLine($"Self : {card} -> Tier {entry.Value} / Answered: True");
-            }
-        candidateStatusText.text = display.ToString();
+        // Legacy debug presentation stays empty; answer transport and logging remain active.
+        candidateStatusText.text = "";
     }
 }
