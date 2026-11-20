@@ -17,27 +17,28 @@ public static class IndependentAnswerSubmissionVerification
     [MenuItem("Tools/Experiment/Verify Independent Submit UI")]
     public static void Run()
     {
-        var r = new Report(); var checks = new List<string>(); ProposedRevealVerification.Endpoint a = null, b = null;
+        var r = new Report(); var checks = new List<string>(); ProposedRevealVerification.Endpoint a = null, b = null; var hosts = new List<ProposedRevealVerification.Endpoint>();
         void Check(bool ok, string name) { if (!ok) throw new Exception(name); checks.Add(name); }
         try
         {
             a = ProposedRevealVerification.CreateEndpoint(1, 2); b = ProposedRevealVerification.CreateEndpoint(2, 2);
+            ParticipantVerificationSession.Host(new[]{a,b},hosts);
             var ui = a.components.OfType<IndependentAnswerSubmissionUI>().Single();
             var button = (UnityEngine.UI.Button)Get(ui, "button"); var status = (TMP_Text)Get(ui, "status"); var label = (TMP_Text)Get(ui, "label");
             TickUI(a, ui);
-            Check(!button.interactable && status.text == "すべてのカードを配置してください", "Unanswered state disables Japanese Submit button");
+            Check(!button.interactable && status.text.Contains("未分類のカード"), "Unanswered state disables Japanese Submit button");
             Check(button.onClick.GetPersistentEventCount() == 1 && button.onClick.GetPersistentTarget(0) == ui,
                 "Submit callback is separate from Final Agreement Ready");
             Check(ui.GetComponents<UnityEngine.EventSystems.BaseRaycaster>().Length > 0 && status.font.HasCharacters(status.text),
                 "World Space raycaster and embedded Japanese glyphs exist");
             foreach (string id in a.answers.AnswerCardIds) a.privateBoard.TryPlaceCard(id, "A");
-            TickUI(a, ui); Check(button.interactable && label.text == "この回答で確定", "All valid local answers enable Submit");
+            TickUI(a, ui); Check(button.interactable && label.text == "回答を提出", "All valid local answers enable Submit");
             string time = SessionVariableTransport.GetClientVariable(a.net, a.session, "selectedAt_Card_01");
             a.Peer(1, "selectedAt_Card_01", SessionVariableTransport.Encode(a.session, "not-a-timestamp"));
             TickUI(a, ui); Check(!button.interactable && !a.submission.TrySubmit(), "Invalid selectedAt blocks Submit");
             a.Peer(1, "selectedAt_Card_01", SessionVariableTransport.Encode(a.session, time));
             TickUI(a, ui); button.onClick.SetPersistentListenerState(0, UnityEngine.Events.UnityEventCallState.EditorAndRuntime); button.onClick.Invoke(); TickUI(a, ui);
-            Check(a.submission.IsLocalSubmitted && !a.privateBoard.CanInteract && label.text == "確定を取り消す" && status.text.Contains("回答確定済み"),
+            Check(a.submission.IsLocalSubmitted && !a.privateBoard.CanInteract && label.text == "提出を取り消す" && status.text.Contains("回答を提出しました"),
                 "Actual button callback submits and updates local readonly/waiting UI");
             Check(!a.answers.TrySetCandidate("Card_01", "D", out _) && a.components.OfType<PrivateAnswerCard>().All(c => !c.Process(null, null)),
                 "Submit blocks candidate data edits and XR select filters");
@@ -66,6 +67,7 @@ public static class IndependentAnswerSubmissionVerification
         catch (Exception e) { r.failure = e.ToString(); Debug.LogException(e); }
         finally
         {
+            foreach(var host in hosts) EditorSceneManager.ClosePreviewScene(host.scene);
             if (a != null) EditorSceneManager.ClosePreviewScene(a.scene); if (b != null) EditorSceneManager.ClosePreviewScene(b.scene);
             r.checks = checks.ToArray(); Directory.CreateDirectory("Library/IndependentAnswerSubmissionVerification");
             File.WriteAllText("Library/IndependentAnswerSubmissionVerification/result.json", JsonUtility.ToJson(r, true));

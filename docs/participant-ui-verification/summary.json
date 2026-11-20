@@ -1,0 +1,77 @@
+{
+  "environment": "Unity 6000.3.17f1 / offline preview scenes / isolated GUID logs; 12 suites in cloned project, final expanded participantUI in working Editor; NOT Quest hardware",
+  "tests": {
+    "participantUI": {
+      "passed": true,
+      "checks": 1996,
+      "failure": "",
+      "observedAtUtc": "2026-11-20T09:22:11.152454+00:00"
+    },
+    "reveal": {
+      "passed": true,
+      "checks": 74,
+      "failure": "",
+      "observedAtUtc": "2026-11-20T09:04:33.810712+00:00"
+    },
+    "sharedPlacement": {
+      "passed": true,
+      "checks": 44,
+      "failure": "",
+      "observedAtUtc": "2026-11-20T09:04:34.179232+00:00"
+    },
+    "submission": {
+      "passed": true,
+      "checks": 14,
+      "failure": "",
+      "observedAtUtc": "2026-11-20T09:04:34.344042+00:00"
+    },
+    "lobby": {
+      "passed": true,
+      "checks": 39,
+      "failure": "",
+      "observedAtUtc": "2026-11-20T09:04:34.732459+00:00"
+    },
+    "result": {
+      "passed": true,
+      "checks": 78,
+      "failure": "",
+      "observedAtUtc": "2026-11-20T09:04:35.287597+00:00"
+    },
+    "logger": {
+      "passed": true,
+      "checks": 29,
+      "failure": "",
+      "observedAtUtc": "2026-11-20T09:04:35.296518+00:00"
+    },
+    "management": {
+      "passed": true,
+      "checks": 209,
+      "failure": "",
+      "observedAtUtc": "2026-11-20T09:04:37.681835+00:00"
+    },
+    "pilot": {
+      "passed": true,
+      "checks": 433,
+      "failure": "",
+      "observedAtUtc": "2026-11-20T09:04:38.937713+00:00"
+    },
+    "answerLogging": {
+      "passed": true,
+      "checks": 378,
+      "failure": "",
+      "observedAtUtc": "2026-11-20T09:04:40.794290+00:00"
+    },
+    "answerStore": {
+      "passed": true,
+      "checks": 18,
+      "failure": "",
+      "observedAtUtc": "2026-11-20T09:04:40.803089+00:00"
+    },
+    "cardDrop": {
+      "passed": true,
+      "checks": 1163,
+      "failure": "",
+      "observedAtUtc": "2026-11-20T09:04:42.015053+00:00"
+    }
+  }
+}

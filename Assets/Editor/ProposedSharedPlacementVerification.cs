@@ -26,6 +26,7 @@ public static class ProposedSharedPlacementVerification
             var a = ProposedRevealVerification.CreateEndpoint(1, 2); endpoints.Add(a);
             var b = ProposedRevealVerification.CreateEndpoint(2, 2); endpoints.Add(b);
             var pair = new[] { a, b };
+            var host = ParticipantVerificationSession.Host(pair,endpoints,ExperimentManager.ExperimentMode.Normal);
             void Deliver(ProposedRevealVerification.Endpoint from, ProposedRevealVerification.Endpoint to) => ProposedRevealVerification.Deliver(from, to);
             void Tick(int frames = 1)
             {
@@ -50,7 +51,7 @@ public static class ProposedSharedPlacementVerification
             Deliver(a, b); Call(a.agreement, "Update"); Call(b.agreement, "Update");
             a.agreement.ToggleLocalReady(); Deliver(a, b);
             Check(a.agreement.IsLocalReady, "Old Normal readiness exists before handover");
-            a.net.SetGlobalVariable("experimentMode", "Proposed"); Deliver(a, b); Tick(2);
+            ParticipantVerificationSession.Prepare(host,pair,ExperimentManager.ExperimentMode.Proposed,"Development",true); Tick(2);
             Check(pair.All(e => !e.shared.IsActive && !e.placements.SendPlacement("Card_01", "C") && !Main(e)[0].Process(null, null)), "Main send and XR selection are blocked before Reveal");
             Check(pair.All(e => !e.agreement.CanToggleReady), "Final Agreement disabled during Private phase");
             Check(pair.All(e => Main(e).All(c => !c.GetComponent<Renderer>().enabled && !c.GetComponent<Collider>().enabled)), "Main visuals/colliders remain hidden before Reveal");
@@ -102,25 +103,14 @@ public static class ProposedSharedPlacementVerification
             Check(a.shared.IsActive && a.agreement.IsBoardConfirmed && Main(a).Select(c => c.CurrentTier).SequenceEqual(new[] { "C", "C", "D" }) &&
                 a.view.DisplayedParticipantCount == 2, "Reconnect restores final shared board, confirmation and initial references without resetting Main");
             Check(a.manager.CurrentState == ExperimentManager.ExperimentState.Confirmed, "Reveal reconnect does not regress Confirmed to Revealed");
-            Set(a.registry, "localRole", ExperimentParticipantRegistry.ClientRole.Experimenter); Call(a.registry, "Update");
-            Check(!a.placements.CanLocalEditSharedBoard && !Main(a)[0].Process(null, null), "Experimenter can view references/Main but cannot edit Proposed Main");
-            Check(a.session.StartNewSession(), "Experimenter can reset after Proposed final confirmation"); Deliver(a, b);
-            for (int i = 0; i < 8; i++)
-            {
-                foreach (var e in pair)
-                {
-                    if (e.session.CurrentSessionId != "") e.Peer(99, ExperimentSessionManager.AckVariable, e.session.CurrentSessionId);
-                    Set(e.session, "nextAttempt", 0f); Call(e.session, "Update");
-                }
-                Deliver(a, b); Deliver(b, a);
-            }
-            Tick(2);
-            Check(pair.All(e => !e.session.IsResettingSession && e.session.SessionEpoch == 1 && !e.shared.IsActive &&
+            Check(!host.placements.CanLocalEditSharedBoard, "Experimenter can view references/Main but cannot edit Proposed Main");
+            long previousEpoch=a.session.SessionEpoch;
+            ParticipantVerificationSession.Prepare(host,pair,ExperimentManager.ExperimentMode.Proposed,"Development",false); Tick(2);
+            Check(pair.All(e => !e.session.IsResettingSession && e.session.SessionEpoch == previousEpoch+1 && !e.shared.IsActive &&
                 !e.reveal.HasRevealed && e.view.DisplayedParticipantCount == 0 && e.manager.CurrentState == ExperimentManager.ExperimentState.Idle), "Session Reset clears shared phase, Reveal references and State on both endpoints");
             Check(pair.All(e => Main(e).All(c => c.CurrentTier == "Unclassified") && e.components.OfType<PrivateAnswerCard>().All(c => c.CurrentTier == "Unclassified") &&
                 !e.agreement.IsBoardConfirmed && !e.agreement.IsLocalReady), "Session Reset clears Main, Private, Ready and Board Confirmed");
-            Set(a.registry, "localRole", ExperimentParticipantRegistry.ClientRole.Participant); Call(a.registry, "Update"); Deliver(a, b);
-            a.net.SetGlobalVariable("experimentMode", "Normal"); Deliver(a, b); Tick();
+            ParticipantVerificationSession.Prepare(host,pair,ExperimentManager.ExperimentMode.Normal,"Development",true); Tick();
             Check(pair.All(e => e.placements.IsNormalMode && !e.privateBoard.IsVisible && e.view.DisplayedParticipantCount == 0 && Main(e).All(c => c.GetComponent<Renderer>().enabled)), "Normal restores Main with no Private or Reveal UI");
             Check(a.placements.SendPlacement("Card_01", "A") && a.placements.SendPlacement("Card_02", "B") && a.placements.SendPlacement("Card_03", "C"), "Normal placement still writes all cards after Proposed reset");
             Deliver(a, b); Tick(2); a.agreement.ToggleLocalReady(); Deliver(a, b); b.agreement.ToggleLocalReady(); Deliver(b, a); Tick(3);

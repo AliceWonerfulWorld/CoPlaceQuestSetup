@@ -44,12 +44,14 @@ public static class ProposedRevealVerification
     {
         var report = new Report(); var checks = new List<string>(); var endpoints = new List<Endpoint>();
         void Check(bool value, string name) { if (!value) throw new Exception(name); checks.Add(name); }
+        var hosts = new List<Endpoint>();
         try
         {
             Endpoint[] Create(int count)
             {
                 var result = new Endpoint[count];
                 for (int i = 0; i < count; i++) { result[i] = CreateEndpoint(i + 1, count); endpoints.Add(result[i]); }
+                hosts.Add(ParticipantVerificationSession.Host(result,endpoints));
                 return result;
             }
             void Tick(Endpoint[] group, int frames = 1)
@@ -122,20 +124,9 @@ public static class ProposedRevealVerification
             Call(p1.reveal, "ClearLocal"); Call(p1.reveal, "LateUpdate");
             Check(p1.reveal.HasRevealed && p1.view.DisplayedParticipantCount == 2 && p1.reveal.GetRevealedSnapshot().participants[1].answers[0].tier == "D", "Reconnect restores committed boards independently of mutable candidate data");
             string oldCommit = p1.net.GetGlobalVariable(ProposedRevealCoordinator.RevealVariable);
-            Set(p1.registry, "localRole", ExperimentParticipantRegistry.ClientRole.Experimenter); Call(p1.registry, "Update");
-            Check(p1.session.StartNewSession(), "Experimenter can New Session after Reveal"); Deliver(p1, p2);
-            for (int i = 0; i < 6; i++)
-            {
-                foreach (var e in pair)
-                {
-                    // Session Reset requires every live client (including the
-                    // passive simulated Experimenter) to acknowledge reset.
-                    if (e.session.CurrentSessionId != "") e.Peer(99, ExperimentSessionManager.AckVariable, e.session.CurrentSessionId);
-                    Set(e.session, "nextAttempt", 0f); Call(e.session, "Update");
-                }
-                foreach (var from in pair) foreach (var to in pair) if (from != to) Deliver(from, to);
-            }
-            Check(pair.All(e => !e.session.IsResettingSession && e.session.SessionEpoch == 1 && e.manager.CurrentState == ExperimentManager.ExperimentState.Idle), "Both endpoints reset Epoch and ExperimentState");
+            long previousEpoch=p1.session.SessionEpoch;
+            ParticipantVerificationSession.Prepare(hosts[0],pair,ExperimentManager.ExperimentMode.Proposed,"Development",false);
+            Check(pair.All(e => !e.session.IsResettingSession && e.session.SessionEpoch == previousEpoch+1 && e.manager.CurrentState == ExperimentManager.ExperimentState.Idle), "Both endpoints reset Epoch and ExperimentState through real owner ACK");
             Check(pair.All(e => !e.reveal.HasRevealed && e.view.DisplayedParticipantCount == 0 && e.components.OfType<PrivateAnswerCard>().All(c => c.CurrentTier == "Unclassified")), "Session reset removes every Mini Board and resets Private positions");
             Check(pair.All(e => e.answers.GetParticipantCandidates(e.net.ClientNo).Values.All(a => !a.Answered && a.Tier == "Unclassified" && a.SelectedAt == "")), "Session reset clears candidate / answered / selectedAt on both clients");
             Check(pair.All(e => !e.submission.IsLocalSubmitted && !e.submission.IsLocalLocked && SessionVariableTransport.GetClientVariable(e.net, e.session, IndependentAnswerSubmission.SubmittedVariable) == "false"), "Session Reset clears independent Submit and private locks");

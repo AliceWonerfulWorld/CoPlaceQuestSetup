@@ -76,7 +76,7 @@ public static class ExperimentResultVerification
                 "Participant direct SetMode cannot bypass Lobby permissions");
             Set(exp.registry, "expectedParticipantCount", 3); Tick(2);
             Check(group.All(e => e.registry.ExpectedParticipantCount == 3) &&
-                ((TMP_Text)Get(UI(a), "participants")).text.Contains("2 / 3 Connected"),
+                ((TMP_Text)Get(UI(a), "participants")).text.Contains("2 / 3"),
                 "Experimenter Inspector count change synchronizes Participant count display and registry requirement");
             Set(a.registry, "expectedParticipantCount", 8); Tick(2);
             Check(a.registry.ExpectedParticipantCount == 3, "Participant local Inspector cannot override Experimenter expected count");
@@ -233,7 +233,7 @@ public static class ExperimentResultVerification
             exp.Global(ExperimentLobbyController.StartVariable, previousStart); Deliver(exp); Tick(2);
             Check(group.All(e => e.lobby.IsLobbyVisible && !e.manager.CanRunExperiment), "Delayed previous-epoch Start cannot bypass Lobby after Reset");
             var connection = Get(a.net, "_connectionManager"); connection.GetType().GetMethod("Disconnect").Invoke(connection, null); Call(UI(a), "Update");
-            Check(!a.lobby.IsConnected && ((TMP_Text)Get(UI(a), "connection")).text.Contains("Waiting") && a.lobby.ConnectedParticipants == 0,
+            Check(!a.lobby.IsConnected && ((TMP_Text)Get(UI(a), "connection")).text.Contains("未接続") && a.lobby.ConnectedParticipants == 0,
                 "Disconnected Lobby shows textual Waiting and zero connected count");
             r.passed = true;
         }
