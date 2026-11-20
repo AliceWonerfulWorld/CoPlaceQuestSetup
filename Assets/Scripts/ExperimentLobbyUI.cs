@@ -20,9 +20,9 @@ public class ExperimentLobbyUI : MonoBehaviour
     private void Update()
     {
         if (lobby == null || experimentManager == null) return;
-        if (contentRoot.activeSelf != lobby.IsLobbyVisible) contentRoot.SetActive(lobby.IsLobbyVisible);
+        if (contentRoot.activeSelf != (lobby.IsLobbyVisible && !lobby.IsExperimenter)) contentRoot.SetActive(lobby.IsLobbyVisible && !lobby.IsExperimenter);
         if (!lobby.IsLobbyVisible) return;
-        experimenterControls.SetActive(lobby.IsExperimenter);
+        experimenterControls.SetActive(false);
         bool normal = experimentManager.CurrentMode == ExperimentManager.ExperimentMode.Normal;
         Set(modeHeading, normal ? "NORMAL  /  共同分類" : "PROPOSED  /  個別回答 → 比較・共同分類");
         Set(modeDescription, normal ? NormalDescription : ProposedDescription);

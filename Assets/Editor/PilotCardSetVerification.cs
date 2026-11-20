@@ -60,7 +60,7 @@ public static class PilotCardSetVerification
             foreach (bool proposed in new[] { false, true })
             {
                 string label = set + "/" + (proposed ? "Proposed" : "Normal");
-                Set(Sets(exp), "nextSessionSet", set);
+                Check(exp.session.SetDraft(proposed ? ExperimentManager.ExperimentMode.Proposed : ExperimentManager.ExperimentMode.Normal, set.ToString(), 2), label + " Draft selected");
                 // Deliberately conflicting Participant Inspector selection must have no effect.
                 Set(Sets(a), "nextSessionSet", set == PilotCardSetController.CardSet.A ? PilotCardSetController.CardSet.B : PilotCardSetController.CardSet.A);
                 var reset = exp.session.EnsureResetUI();
@@ -68,7 +68,7 @@ public static class PilotCardSetVerification
                 Check(reset.IsConfirmationOpen && !exp.session.IsResettingSession, label + " UI confirmation preserves current Session");
                 ((UnityEngine.UI.Button)reset.GetType().GetField("confirmButton", Flags).GetValue(reset)).onClick.Invoke(); reset.ConfirmReset();
                 Check(exp.session.IsResettingSession && !reset.CanReset, label + " UI Reset accepted once and locks pending ACK"); Deliver(exp); Tick(14);
-                reset.Refresh(); Check(reset.CanReset && reset.StatusMessage.StartsWith("Reset complete"), label + " UI reports all-client Reset completion");
+                reset.Refresh(); Check(reset.CanReset && reset.StatusMessage.Contains("同期が完了"), label + " UI reports all-client Reset completion");
                 Check(savedCsv.All(pair => File.ReadAllBytes(pair.Key).SequenceEqual(pair.Value)), label + " previous Session CSV bytes preserved after Reset");
                 Check(group.All(e => !e.session.IsResettingSession && e.session.CurrentCardSetId == set.ToString() && Sets(e).ActiveSetId == set.ToString()), label + " common set applied before reset ACK");
                 string prefix = set == PilotCardSetController.CardSet.Development ? "Card_" : set.ToString();

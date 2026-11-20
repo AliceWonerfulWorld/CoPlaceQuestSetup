@@ -27,6 +27,18 @@ public sealed class ExperimentLogger : MonoBehaviour
     private string liveSession;
     private ExperimentCsvLogStore.Observation pendingAbort;
     private float nextRetry;
+    private string preparedSession;
+    private readonly HashSet<string> savedFinal = new HashSet<string>(), savedIndependent = new HashSet<string>();
+    public bool IsOperational => isActiveAndEnabled && subscribed && CanWrite;
+    public bool IsSaving { get; private set; }
+    public int UnsavedCount => pending.Count;
+    public bool HasMonotonicTiming => IsOperational && store != null && sessionManager != null && store.HasMonotonicOrigin(sessionManager.CurrentSessionId);
+    public bool IsPreparedInCurrentRun => IsOperational && sessionManager != null && preparedSession == sessionManager.CurrentSessionId && HasMonotonicTiming;
+    public string SaveStatus => !IsOperational ? "Loggerが無効です" : LastError != "" ? "保存失敗（詳細を確認してください）" : IsSaving ? "保存中" : pending.Count > 0 ? "保存待ち" : store == null ? "まだ保存対象ではありません" : "保存成功";
+    public string FinalSaveStatus => finalAgreement == null || !finalAgreement.IsBoardConfirmed ? "まだ保存対象ではありません" : savedFinal.Contains(sessionManager.CurrentSessionId) ? "保存済み" : "未保存";
+    public string IndependentSaveStatus => reveal == null || !reveal.HasRevealed || sessionManager.CurrentMode != ExperimentManager.ExperimentMode.Proposed ? "まだ保存対象ではありません" : savedIndependent.Contains(sessionManager.CurrentSessionId) ? "保存済み" : "未保存";
+    internal void MarkPreparationRequested(string id) { if (IsOperational) preparedSession = id; }
+    public bool RetrySave() { if (!IsOperational) return false; try { CaptureSnapshot(); Drain(); } catch (Exception error) { LastError = error.Message; } return pending.Count == 0 && LastError == ""; }
     public string LastError { get; private set; } = "";
     public string OutputDirectory => store != null ? store.RootDirectory :
         (string.IsNullOrEmpty(outputRootOverride) ? Path.Combine(Application.persistentDataPath, "ExperimentLogs") : outputRootOverride);
@@ -82,6 +94,7 @@ public sealed class ExperimentLogger : MonoBehaviour
             if (shared != null) shared.OnSharedClassificationStarted -= OnSharedStarted;
         }
         if (network != null) { network.OnReady.RemoveListener(OnNetworkReady); network.OnClientVariableChanged.RemoveListener(OnClientChanged); }
+        preparedSession = null;
         subscribed = false; network = null; liveSession = null; Drain();
     }
     private void OnApplicationQuit() => Drain();
@@ -214,10 +227,11 @@ public sealed class ExperimentLogger : MonoBehaviour
     private void Drain()
     {
         if (!CanWrite || pending.Count == 0) return;
+        IsSaving = true;
         try
         {
             if (store == null) { store = new ExperimentCsvLogStore(OutputDirectory); Debug.Log("[Experiment Logger] CSV root: " + store.RootDirectory, this); }
-            while (pending.Count > 0) { var entry = pending.Peek(); store.Record(entry); pending.Dequeue(); }
+            while (pending.Count > 0) { var entry = pending.Peek(); store.Record(entry); pending.Dequeue(); if (entry.FinalPlacements != null) savedFinal.Add(entry.SessionId); if (entry.IndependentAnswers != null) savedIndependent.Add(entry.SessionId); }
             LastError = "";
         }
         catch (Exception error)
@@ -226,5 +240,6 @@ public sealed class ExperimentLogger : MonoBehaviour
             if (LastError != error.Message) Debug.LogError("[Experiment Logger] CSV save failed; event retained for retry: " + error.Message, this);
             LastError = error.Message;
         }
+        finally { IsSaving = false; }
     }
 }

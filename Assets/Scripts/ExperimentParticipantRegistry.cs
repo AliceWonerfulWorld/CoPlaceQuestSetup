@@ -26,6 +26,8 @@ public class ExperimentParticipantRegistry : MonoBehaviour
     {
         get
         {
+            var session = GetComponent<ExperimentSessionManager>();
+            if (session != null && session.HasAppliedSettings) return session.AppliedExpectedParticipants;
             var net = Network;
             if (net != null && net.IsReady)
             {
@@ -101,7 +103,7 @@ public class ExperimentParticipantRegistry : MonoBehaviour
     private void PublishExpectedCount()
     {
         if (subscribedManager == null || !subscribedManager.IsReady || !IsLocalExperimenter) return;
-        string count = Mathf.Max(1, expectedParticipantCount).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        string count = ExpectedParticipantCount.ToString(System.Globalization.CultureInfo.InvariantCulture);
         if (publishedExpectedCount != count && subscribedManager.SetClientVariable(ExpectedCountVariable, count))
             publishedExpectedCount = count;
     }

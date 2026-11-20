@@ -32,14 +32,14 @@ public class ExperimentResultUI : MonoBehaviour
     private void LateUpdate() => Refresh();
     public void Refresh()
     {
-        bool visible = experimentManager != null &&
+        bool visible = (participantRegistry == null || !participantRegistry.IsLocalExperimenter) && experimentManager != null &&
             experimentManager.CurrentState == ExperimentManager.ExperimentState.Confirmed &&
             (sessionManager == null || !sessionManager.IsResettingSession);
         if (contentRoot == null) return;
         if (contentRoot.activeSelf != visible) contentRoot.SetActive(visible);
         if (!visible) return;
         bool admin = participantRegistry != null && participantRegistry.IsLocalExperimenter;
-        if (experimenterControls != null) experimenterControls.SetActive(admin);
+        if (experimenterControls != null) experimenterControls.SetActive(false);
         if (!admin) return;
         string id = sessionManager != null ? sessionManager.CurrentSessionId : "";
         string text = $"Mode: {experimentManager.CurrentMode}  /  Confirmed\nSession ID: {id}\n待機中 — New Session / Resetで次の実験を準備";

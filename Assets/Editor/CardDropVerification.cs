@@ -108,7 +108,7 @@ public static class CardDropVerification
             foreach (bool proposed in new[] { false, true })
             {
                 string label = set + "/" + (proposed ? "Proposed" : "Normal");
-                var sets = exp.components.OfType<PilotCardSetController>().Single(); Set(sets, "nextSessionSet", set == "A" ? PilotCardSetController.CardSet.A : PilotCardSetController.CardSet.B);
+                var sets = exp.components.OfType<PilotCardSetController>().Single(); exp.session.SetDraft(proposed ? ExperimentManager.ExperimentMode.Proposed : ExperimentManager.ExperimentMode.Normal, set, 2);
                 Check(exp.session.StartNewSession(), label + " Reset accepted"); Deliver(exp); Tick(14);
                 Check(group.All(e => !e.session.IsResettingSession && e.components.OfType<TierZone>().All(z => !z.IsHighlighted && !z.IsPreviewVisible)), label + " Reset clears all local feedback");
                 if (proposed) exp.lobby.SelectProposed(); else exp.lobby.SelectNormal(); Deliver(exp); Tick(3);
@@ -173,6 +173,7 @@ public static class CardDropVerification
                 Check(group.All(e => e.agreement.IsBoardConfirmed), label + " Final Agreement still confirms eight cards");
             }
             // Reset while a live local drag has feedback, rather than only after confirmation.
+            exp.session.SetDraft(ExperimentManager.ExperimentMode.Normal, "A", 2);
             Check(exp.session.StartNewSession(), "live-drag Reset preparation"); Deliver(exp); Tick(14); exp.lobby.SelectNormal(); Deliver(exp); Tick(3);
             Check(exp.lobby.StartExperiment(), "live-drag Reset Start"); Deliver(exp); Tick(4);
             var moving = Card(a, a.answers.AnswerCardIds[0], false); Hover(moving, Center(Zones(a, false).Single(z => z.tierName == "D")));

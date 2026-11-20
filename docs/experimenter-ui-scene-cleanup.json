@@ -1,0 +1,60 @@
+{
+  "removedRoots": [
+    {
+      "root": 50628292,
+      "objects": 11,
+      "blocks": 48,
+      "scripts": [
+        "0cd44c1031e13a943bb63640046fad76",
+        "4e29b1a8efbd4b44bb3f3716e73f07ff",
+        "dc42784cf147c0c48a680349fa168899",
+        "f4688fdb7df04437aeb418b961361dc5",
+        "fe87c0e1cc204ed48ad3b37840f39efc"
+      ],
+      "externalReferences": []
+    },
+    {
+      "root": 1039180215,
+      "objects": 11,
+      "blocks": 48,
+      "scripts": [
+        "0cd44c1031e13a943bb63640046fad76",
+        "4e29b1a8efbd4b44bb3f3716e73f07ff",
+        "dc42784cf147c0c48a680349fa168899",
+        "f4688fdb7df04437aeb418b961361dc5",
+        "fe87c0e1cc204ed48ad3b37840f39efc"
+      ],
+      "externalReferences": []
+    },
+    {
+      "root": 2081270360,
+      "objects": 11,
+      "blocks": 48,
+      "scripts": [
+        "0cd44c1031e13a943bb63640046fad76",
+        "4e29b1a8efbd4b44bb3f3716e73f07ff",
+        "dc42784cf147c0c48a680349fa168899",
+        "f4688fdb7df04437aeb418b961361dc5",
+        "fe87c0e1cc204ed48ad3b37840f39efc"
+      ],
+      "externalReferences": []
+    },
+    {
+      "root": 2105247976,
+      "objects": 11,
+      "blocks": 48,
+      "scripts": [
+        "0cd44c1031e13a943bb63640046fad76",
+        "4e29b1a8efbd4b44bb3f3716e73f07ff",
+        "dc42784cf147c0c48a680349fa168899",
+        "f4688fdb7df04437aeb418b961361dc5",
+        "fe87c0e1cc204ed48ad3b37840f39efc"
+      ],
+      "externalReferences": []
+    }
+  ],
+  "retainedBlockDifferences": [
+    "9223372036854775807"
+  ],
+  "explanation": "Only SceneRoots references changed among retained blocks. All other blocks match the pre-implementation worktree byte for byte."
+}

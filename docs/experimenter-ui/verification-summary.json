@@ -1,0 +1,50 @@
+{
+  "management": {
+    "passed": true,
+    "checkCount": 209,
+    "failure": "",
+    "report": "Documentation/ExperimenterControlPanelVerification.json"
+  },
+  "pilot": {
+    "passed": true,
+    "checkCount": 433,
+    "failure": "",
+    "report": "Documentation/PilotCardSetVerification.json"
+  },
+  "cardDrop": {
+    "passed": true,
+    "checkCount": 1163,
+    "failure": "",
+    "report": "Documentation/CardDropVerification.json"
+  },
+  "lobby": {
+    "passed": true,
+    "checkCount": 39,
+    "failure": "",
+    "report": "Library/ExperimentLobbyVerification/result.json"
+  },
+  "result": {
+    "passed": true,
+    "checkCount": 78,
+    "failure": "",
+    "report": "Library/ExperimentResultVerification/result.json"
+  },
+  "logger": {
+    "passed": true,
+    "checkCount": 29,
+    "failure": "",
+    "report": "Library/ExperimentLoggerVerification/result.json"
+  },
+  "answerStore": {
+    "passed": true,
+    "checkCount": 18,
+    "failure": "",
+    "report": "Library/AnswerSnapshotStoreVerification/7153ac9482a74208a3cf391c36b0f207/result.json"
+  },
+  "answerLogging": {
+    "passed": true,
+    "checkCount": 378,
+    "failure": "",
+    "report": "Library/AnswerLoggingVerification/5c35775b1f454fb38ed7d0709a63f20b/result.json"
+  }
+}

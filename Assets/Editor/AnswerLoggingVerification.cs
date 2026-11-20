@@ -52,7 +52,7 @@ public static class AnswerLoggingVerification
                     foreach (bool proposed in new[] { false, true })
                     {
                         string label = count + "/" + set + "/" + (proposed ? "Proposed" : "Normal");
-                        Set(exp.components.OfType<PilotCardSetController>().Single(), "nextSessionSet", set);
+                        Check(exp.session.SetDraft(proposed ? ExperimentManager.ExperimentMode.Proposed : ExperimentManager.ExperimentMode.Normal, set.ToString(), count), label + " Draft settings");
                         Check(exp.session.ResetSession(), label + " Reset accepted"); Deliver(exp); Tick(14);
                         Check(group.All(e => !e.session.IsResettingSession), label + " all peers reset");
                         Check(saved.All(p => File.ReadAllBytes(p.Key).SequenceEqual(p.Value)), label + " prior CSV bytes unchanged");
@@ -141,6 +141,7 @@ public static class AnswerLoggingVerification
                         foreach (string file in Directory.GetFiles(folder, "*.csv")) saved[file] = File.ReadAllBytes(file);
                     }
                     // Interrupted trials need no nonexistent final answer, but have an explicit outcome.
+                    exp.session.SetDraft(ExperimentManager.ExperimentMode.Normal, "Development", count);
                     Check(exp.session.ResetSession(), "prepare aborted trial"); Deliver(exp); Tick(14);
                     exp.lobby.SelectNormal(); Deliver(exp); Tick(3); Check(exp.lobby.StartExperiment(), "start aborted trial"); Deliver(exp); Tick(3);
                     string aborted = Path.Combine(root, exp.session.CurrentSessionId);

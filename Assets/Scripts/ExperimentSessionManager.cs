@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Styly.NetSync;
 using UnityEngine;
 
@@ -18,10 +19,55 @@ public class ExperimentSessionManager : MonoBehaviour
     [SerializeField] private FinalAgreementUI agreementUI;
     [SerializeField] private PilotCardSetController cardSets;
     private NetSyncManager network;
+    private ExperimentLobbyController lobby;
+    public ExperimentLobbyController Lobby => lobby != null ? lobby : (lobby = gameObject.scene.GetRootGameObjects().SelectMany(o => o.GetComponentsInChildren<ExperimentLobbyController>(true)).SingleOrDefault());
     private readonly Queue<string> pendingControls = new Queue<string>();
     private string observedControl;
-    [Serializable] private class Control { public string id; public string startedAt; public string activatedAt; public string phase; public int owner; public string mode; public string cardSetId; public long epoch; }
+    [Serializable] private class Control { public string id; public string startedAt; public string activatedAt; public string phase; public int owner; public string mode; public string cardSetId; public long epoch; public int settingsVersion; public int expectedParticipantCount; }
     private Control control;
+    public const string SettingsAckVariable = "experimentSessionSettingsAck";
+    public ExperimentManager.ExperimentMode DraftMode { get; private set; } = ExperimentManager.ExperimentMode.Proposed;
+    public string DraftCardSetId { get; private set; } = "A";
+    public int DraftExpectedParticipants { get; private set; } = 2;
+    public bool HasAppliedSettings => control != null && control.settingsVersion == 1 && control.expectedParticipantCount > 0 &&
+        (control.mode == "Normal" || control.mode == "Proposed") && (control.cardSetId == "A" || control.cardSetId == "B" || control.cardSetId == "Development");
+    public bool IsPreparationRequestPending => pendingSessionRequestId != null;
+    public bool HasReceivedControl => control != null;
+    public bool IsLocalInitialized => network != null && HasClientAcknowledged(network.ClientNo);
+    public bool AreConnectedClientsInitialized => SyncTargetCount > 0 && AcknowledgedCount == SyncTargetCount;
+    public int AppliedExpectedParticipants => HasAppliedSettings ? control.expectedParticipantCount : 0;
+    public bool HasDraftChanges => !HasAppliedSettings || DraftMode != SessionMode || DraftCardSetId != CurrentCardSetId || DraftExpectedParticipants != AppliedExpectedParticipants;
+    public bool SetDraft(ExperimentManager.ExperimentMode mode, string set, int count)
+    {
+        if (participantRegistry == null || !participantRegistry.IsLocalExperimenter || IsResettingSession ||
+            !Enum.IsDefined(typeof(ExperimentManager.ExperimentMode), mode) || count < 1 ||
+            (set != "A" && set != "B" && set != "Development")) return false;
+        DraftMode = mode; DraftCardSetId = set; DraftExpectedParticipants = count; return true;
+    }
+    public string SettingsSignature => HasAppliedSettings ? CurrentSessionId + ":" + SessionEpoch + ":" + control.mode + ":" + CurrentCardSetId + ":" + AppliedExpectedParticipants : "";
+    public bool HasClientAcknowledged(int client) => network != null && HasAppliedSettings &&
+        network.GetClientVariable(AckVariable, client) == CurrentSessionId && network.GetClientVariable(SettingsAckVariable, client) == SettingsSignature;
+    public int SyncTargetCount { get { if (network == null || !network.IsReady) return 0; var clients = new HashSet<int>(network.GetAliveClients(includeStealthClients: true)); clients.Add(network.ClientNo); return clients.Count; } }
+    public int AcknowledgedCount { get { if (network == null || !network.IsReady) return 0; var clients = new HashSet<int>(network.GetAliveClients(includeStealthClients: true)); clients.Add(network.ClientNo); int count = 0; foreach (int client in clients) if (HasClientAcknowledged(client)) count++; return count; } }
+    public int InitializedParticipants { get { int count = 0; if (participantRegistry != null) foreach (int client in participantRegistry.ParticipantClientNos) if (HasClientAcknowledged(client)) count++; return count; } }
+    public string PreparationStatus
+    {
+        get
+        {
+            if (localResetFailed) return "準備失敗：保存を確認し、端末構成を修復して全端末とRoomを再起動してください";
+            if (IsResettingSession && network != null && network.IsReady && control != null && !new HashSet<int>(network.GetAliveClients(includeStealthClients: true)).Contains(control.owner)) return "準備失敗：準備元端末が未接続です。同じ端末を再接続してください";
+            if (IsResettingSession && Time.unscaledTime >= resetDeadline) return "同期タイムアウト：端末を再接続してください。強制準備はできません";
+            if (pendingSessionRequestId != null) return "新しいセッションの通知を送信中（要求受付済み）";
+            if (IsResettingSession && !localDefaultsQueued) return "実験条件を適用中（新しい通知を受信済み）";
+            if (IsResettingSession) return "接続端末の初期化を待機中";
+            if (!HasAppliedSettings) return "新規セッションの準備が必要です";
+            if (AcknowledgedCount != SyncTargetCount) return "接続端末の初期化を待機中";
+            if (participantRegistry.ParticipantClientNos.Count != AppliedExpectedParticipants) return "接続中端末の同期完了・必要参加者の接続待ち";
+            var lobby = Lobby;
+            return lobby != null && lobby.CanStart ? "セッションの準備完了" : "接続中端末の同期完了";
+        }
+    }
+
     private readonly Dictionary<string, string> globalCache = new Dictionary<string, string>();
     private readonly Dictionary<string, string> clientCache = new Dictionary<string, string>();
     private readonly Dictionary<string, string> globalRepairs = new Dictionary<string, string>();
@@ -114,7 +160,7 @@ public class ExperimentSessionManager : MonoBehaviour
             controlRepairQueued = network.ClientNo == control.owner;
             return;
         }
-        if (control != null && next.id == control.id && next.cardSetId != control.cardSetId) return;
+        if (control != null && next.id == control.id && (next.cardSetId != control.cardSetId || next.mode != control.mode || next.expectedParticipantCount != control.expectedParticipantCount || next.settingsVersion != control.settingsVersion || next.epoch != control.epoch || next.owner != control.owner)) return;
         control = next;
         controlRepairQueued = false;
         if (pendingSessionRequestId == next.id) pendingSessionRequestId = null;
@@ -130,7 +176,9 @@ public class ExperimentSessionManager : MonoBehaviour
                 if (cardSets != null) cardSets.ApplySessionSet(CurrentCardSetId);
                 else if (CurrentCardSetId != "Development") throw new InvalidOperationException("Pilot card set assets are missing");
                 OnSessionResetStarted?.Invoke(next.id);
-                ClearLocal(); BuildDefaults();
+                ClearLocal();
+                if (HasAppliedSettings) experimentManager.ApplySessionMode(SessionMode);
+                BuildDefaults();
             }
             catch (Exception ex) { localResetFailed = true; Fail(ex.Message); return; }
             // Existing current-session answers survive a same-session reconnect.
@@ -151,6 +199,7 @@ public class ExperimentSessionManager : MonoBehaviour
     private void BuildDefaults()
     {
         globalDefaults.Clear(); clientDefaults.Clear();
+        if (HasAppliedSettings) globalDefaults["experimentMode"] = control.mode;
         // Include historical card keys as well as current Inspector card references.
         var cards = new HashSet<string>(normalPlacementSync.CardIds);
         foreach (var pair in network.GetAllGlobalVariables())
@@ -210,6 +259,7 @@ public class ExperimentSessionManager : MonoBehaviour
             network.GetClientVariable(AckVariable) != CurrentSessionId && Time.unscaledTime >= nextAckRepair)
         {
             nextAckRepair = Time.unscaledTime + 1;
+            network.SetClientVariable(SettingsAckVariable, SettingsSignature);
             network.SetClientVariable(AckVariable, CurrentSessionId);
         }
         // NetSync enumerates its cache while invoking change listeners. Defer
@@ -252,11 +302,16 @@ public class ExperimentSessionManager : MonoBehaviour
             }
         }
         if (!localDefaultsQueued) return;
+        if (HasAppliedSettings && (experimentManager.CurrentMode != SessionMode || participantRegistry.ExpectedParticipantCount != AppliedExpectedParticipants ||
+            (cardSets != null && cardSets.ActiveSetId != CurrentCardSetId))) { localResetFailed = true; Fail("Applied session settings do not match local configuration"); return; }
+        if (HasAppliedSettings && network.GetClientVariable(SettingsAckVariable) != SettingsSignature)
+        { network.SetClientVariable(SettingsAckVariable, SettingsSignature); return; }
         // Acknowledgement follows observed echoes, not merely accepted/queued writes.
         if (network.GetClientVariable(AckVariable) != CurrentSessionId)
         {
             foreach (var pair in clientDefaults)
                 if (SessionVariableTransport.GetClientVariable(network, this, pair.Key) != pair.Value) return;
+            network.SetClientVariable(SettingsAckVariable, SettingsSignature);
             network.SetClientVariable(AckVariable, CurrentSessionId);
             return;
         }
@@ -265,9 +320,9 @@ public class ExperimentSessionManager : MonoBehaviour
             foreach (var pair in globalDefaults)
                 if (SessionVariableTransport.GetGlobalVariable(network, this, pair.Key) != pair.Value) return;
             foreach (int client in network.GetAliveClients(includeStealthClients: true))
-                if (network.GetClientVariable(AckVariable, client) != CurrentSessionId) { ReportTimeout(); return; }
+                if (HasAppliedSettings ? !HasClientAcknowledged(client) : network.GetClientVariable(AckVariable, client) != CurrentSessionId) { ReportTimeout(); return; }
             if (!network.SetGlobalVariable(IdVariable, CurrentSessionId)) { Fail("Session ID send failed"); return; }
-            var active = new Control { id = control.id, startedAt = control.startedAt, activatedAt = DateTime.UtcNow.ToString("o"), owner = control.owner, mode = control.mode, cardSetId = control.cardSetId, epoch = control.epoch, phase = "active" };
+            var active = new Control { id = control.id, startedAt = control.startedAt, activatedAt = DateTime.UtcNow.ToString("o"), owner = control.owner, mode = control.mode, cardSetId = control.cardSetId, epoch = control.epoch, settingsVersion = control.settingsVersion, expectedParticipantCount = control.expectedParticipantCount, phase = "active" };
             completionQueued = network.SetGlobalVariable(ControlVariable, JsonUtility.ToJson(active));
         }
         if (control.phase == "active") CompleteLocal();
@@ -275,7 +330,7 @@ public class ExperimentSessionManager : MonoBehaviour
     }
     private void ReportTimeout()
     {
-        if (Time.unscaledTime >= resetDeadline && string.IsNullOrEmpty(LastFailure)) Fail("Waiting for reset acknowledgements. Reconnect peers or retry New Session; operations remain blocked.");
+        if (Time.unscaledTime >= resetDeadline && string.IsNullOrEmpty(LastFailure)) Fail("Waiting for reset acknowledgements. Reconnect the same peers; operations remain blocked.");
     }
     private void Fail(string reason) { LastFailure = reason; Debug.LogWarning($"[Session Reset Failed] Reason: {reason}", this); }
     private void CompleteLocal()
@@ -310,13 +365,14 @@ public class ExperimentSessionManager : MonoBehaviour
         var logger = experimentManager.GetComponent<ExperimentLogger>();
         if (logger == null || !logger.TryFlushBeforeReset()) { Fail("CSV save failed; Reset blocked: " + (logger != null ? logger.LastError : "ExperimentLogger is missing")); return false; }
         Debug.Log($"[Session Reset Start] Previous Session: {CurrentSessionId}");
-        var next = new Control { id = Guid.NewGuid().ToString("N"), startedAt = DateTime.UtcNow.ToString("o"), phase = "resetting", owner = network.ClientNo, mode = experimentManager.CurrentMode.ToString(), cardSetId = cardSets != null ? cardSets.NextSessionSetId : "Development", epoch = SessionEpoch + 1 };
+        var next = new Control { id = Guid.NewGuid().ToString("N"), startedAt = DateTime.UtcNow.ToString("o"), phase = "resetting", owner = network.ClientNo, mode = DraftMode.ToString(), cardSetId = DraftCardSetId, expectedParticipantCount = DraftExpectedParticipants, settingsVersion = 1, epoch = SessionEpoch + 1 };
         // Local operations stop immediately while waiting for the Room echo.
         pendingSessionRequestId = next.id;
         resetDeadline = Time.unscaledTime + 30;
         LastFailure = "";
         IsResettingSession = true;
         if (!network.SetGlobalVariable(ControlVariable, JsonUtility.ToJson(next))) { pendingSessionRequestId = null; IsResettingSession = control != null && control.phase == "resetting"; Fail("Reset notification send failed"); return false; }
+        logger.MarkPreparationRequested(next.id);
         logger.MarkResetAccepted();
         Debug.Log($"[New Session] Session ID: {next.id}");
         return true;

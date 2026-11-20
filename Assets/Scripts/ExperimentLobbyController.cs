@@ -58,17 +58,28 @@ public class ExperimentLobbyController : MonoBehaviour
             if (!IsExperimenter) return "実験者の開始をお待ちください";
             if (!IsConnected) return "接続を待っています";
             if (Network.GetClientVariable(ExperimentParticipantRegistry.RoleVariable, Network.ClientNo) != "Experimenter") return "実験者のRole登録同期を待っています";
-            if (IsResetting) return "Session Resetを処理しています";
+            if (IsResetting) return "新規セッションを準備しています";
             if (IsExperimentStarted) return "実験は開始済みです";
             if (pending != null) return "開始を同期しています";
-            if (sessionManager == null || string.IsNullOrEmpty(SessionId) || string.IsNullOrEmpty(sessionManager.SessionStartedAtUtc)) return "Sessionの準備が完了していません。New Sessionを実行してください";
+            if (sessionManager == null || string.IsNullOrEmpty(SessionId) || string.IsNullOrEmpty(sessionManager.SessionStartedAtUtc)) return "新規セッションの準備が必要です";
+            if (Network.GetGlobalVariable(ExperimentSessionManager.IdVariable) != SessionId) return "セッションIDの同期を待っています";
+            if (!sessionManager.HasAppliedSettings || sessionManager.SessionEpoch <= 0) return "新規セッションの準備が必要です（適用済み設定がありません）";
+            if (experimentManager == null || experimentManager.CurrentMode != sessionManager.SessionMode) return "適用済み実験方式の一致を待っています";
+            if (sessionManager.HasDraftChanges) return "次回設定が未適用です。新規セッションの準備が必要です";
+            var logger = experimentManager != null ? experimentManager.GetComponent<ExperimentLogger>() : null;
+            if (logger == null || !logger.IsOperational) return "Loggerが有効ではありません";
+            if (logger.UnsavedCount != 0 || logger.LastError != "") return "ログの保存が完了していません。保存を再試行してください";
+            if (!logger.IsPreparedInCurrentRun || !logger.HasMonotonicTiming) return "新規セッションの準備が必要です（今回の計時を確認できません）";
+            if (sessionManager.AcknowledgedCount != sessionManager.SyncTargetCount) return "接続端末の現セッションACK・設定同期を待っています";
             if (ConnectedParticipants != ExpectedParticipants || ExpectedParticipants == 0) return ConnectedParticipants < ExpectedParticipants ? $"参加者が不足しています {ConnectedParticipants} / {ExpectedParticipants}" : $"参加者数を確認してください {ConnectedParticipants} / {ExpectedParticipants}";
-            if (experimentManager == null || experimentManager.CurrentState != ExperimentManager.ExperimentState.Idle) return "New Sessionで開始前の状態に戻してください";
+            if (experimentManager == null || experimentManager.CurrentState != ExperimentManager.ExperimentState.Idle) return "新規セッションの準備で開始前の状態に戻してください";
             if (SessionVariableTransport.GetGlobalVariable(Network, sessionManager, "experimentMode") != experimentManager.CurrentMode.ToString()) return "方式の同期を待っています";
             foreach (int client in participantRegistry.ParticipantClientNos)
-                if (Network.GetClientVariable(ExperimentParticipantRegistry.RoleVariable, client) != "Participant") return "Participant登録の同期を待っています";
+                if (!sessionManager.HasClientAcknowledged(client)) return "参加者の現セッション初期化を待っています";
             foreach (int client in participantRegistry.ParticipantClientNos)
-                if (SessionVariableTransport.GetClientVariable(Network, sessionManager, "experimentState", client) != "Idle") return "Participantの準備を待っています";
+                if (Network.GetClientVariable(ExperimentParticipantRegistry.RoleVariable, client) != "Participant") return "参加者登録の同期を待っています";
+            foreach (int client in participantRegistry.ParticipantClientNos)
+                if (SessionVariableTransport.GetClientVariable(Network, sessionManager, "experimentState", client) != "Idle") return "参加者の準備を待っています";
             return "";
         }
     }

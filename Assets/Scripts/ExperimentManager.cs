@@ -146,7 +146,7 @@ public class ExperimentManager : MonoBehaviour
        {
            // A fixed initial Room default avoids conflicting Inspector defaults
            // on simultaneous first joins. Never overwrite an existing Room value.
-           if (currentState == ExperimentState.Idle && RoomClientsAreIdle())
+           if ((sessionManager == null || !sessionManager.HasAppliedSettings) && currentState == ExperimentState.Idle && RoomClientsAreIdle())
                initializationRequested = SendMode(ExperimentMode.Proposed);
            return;
        }
@@ -192,6 +192,7 @@ public class ExperimentManager : MonoBehaviour
 
    private void ApplyRoomMode(string value, bool restoring)
    {
+       if (sessionManager != null && sessionManager.HasAppliedSettings && value != sessionManager.SessionMode.ToString()) return;
        // Accept only the two protocol strings, not numeric Enum.TryParse values.
        ExperimentMode mode;
        if (value == "Normal") mode = ExperimentMode.Normal;
@@ -217,8 +218,14 @@ public class ExperimentManager : MonoBehaviour
        OnModeChanged?.Invoke(currentMode);
    }
 
+   public void ApplySessionMode(ExperimentMode mode)
+   {
+       if (sessionManager == null || !sessionManager.IsResettingSession || !sessionManager.HasAppliedSettings || mode != sessionManager.SessionMode) return;
+       currentMode = mode; initializationRequested = true; OnModeChanged?.Invoke(mode);
+   }
    public void SetMode(ExperimentMode mode)
    {
+        if (sessionManager != null) { sessionManager.SetDraft(mode, sessionManager.DraftCardSetId, sessionManager.DraftExpectedParticipants); return; }
         Subscribe();
         string reason = ModeChangeBlockReason;
         if (!Enum.IsDefined(typeof(ExperimentMode), mode)) reason = "Invalid Mode";

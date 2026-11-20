@@ -88,6 +88,7 @@ public sealed class ExperimentCsvLogStore
     private readonly Dictionary<string, double?> origins = new Dictionary<string, double?>();
     private static readonly UTF8Encoding Utf8Bom = new UTF8Encoding(true);
     public string RootDirectory => root;
+    public bool HasMonotonicOrigin(string sessionId) => sessionId != null && origins.TryGetValue(sessionId, out var origin) && origin.HasValue;
 
     public ExperimentCsvLogStore(string rootDirectory, string observerRunId = null)
     {

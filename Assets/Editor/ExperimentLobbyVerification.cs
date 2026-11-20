@@ -27,6 +27,7 @@ public static class ExperimentLobbyVerification
             var group = endpoints.ToArray();
             Set(exp.registry, "localRole", ExperimentParticipantRegistry.ClientRole.Experimenter); Call(exp.registry, "Update");
             foreach (var e in group) Set(e.manager, "lobby", e.lobby);
+            exp.session.SetDraft(ExperimentManager.ExperimentMode.Normal,"Development",2);
             void Deliver(ProposedRevealVerification.Endpoint from) { foreach (var to in group) if (from != to) ProposedRevealVerification.Deliver(from, to); }
             foreach (var e in group) Deliver(e);
             void Tick(int count = 1)
@@ -56,7 +57,7 @@ public static class ExperimentLobbyVerification
             Check(group.All(e => e.lobby.IsLobbyVisible && !e.manager.CanRunExperiment), "Boot displays Lobby and blocks experiment activation on all roles");
             Check(a.lobby.ConnectedParticipants == 2 && exp.lobby.ConnectedParticipants == 2 && !a.lobby.IsExperimenter && exp.lobby.IsExperimenter,
                 "Role-based participant count excludes Experimenter and uses registry expectation");
-            Check(!((GameObject)Get(UI(a), "experimenterControls")).activeSelf && ((GameObject)Get(UI(exp), "experimenterControls")).activeSelf,
+            Check(!((GameObject)Get(UI(a), "experimenterControls")).activeSelf && !((GameObject)Get(UI(exp), "experimenterControls")).activeSelf,
                 "Participant has no management panel; Experimenter sees controls");
             Check(((GameObject)Get(UI(a), "contentRoot")).GetComponentsInChildren<UnityEngine.UI.Button>().Length == 0,
                 "Participant visible Lobby contains no Start/Mode/Reset buttons");
@@ -65,25 +66,24 @@ public static class ExperimentLobbyVerification
             Check(group.All(e => !e.agreement.CanToggleReady && e.view.DisplayedParticipantCount == 0 &&
                 Main(e).All(c => !c.GetComponent<Renderer>().enabled && !c.GetComponent<Collider>().enabled)), "Lobby hides Main/Reveal and disables Final Agreement");
             Check(group.All(e => e.components.OfType<ExperimentModeUI>().All(x => !((Canvas)Get(x, "canvas")).enabled)), "Legacy Mode management canvas is hidden during Lobby");
-            Check(!a.lobby.StartExperiment() && !exp.lobby.CanStart && exp.lobby.StartBlockReason.Contains("New Session"), "Participant Start rejected; Experimenter requires a valid New Session");
+            Check(!a.lobby.StartExperiment() && !exp.lobby.CanStart && exp.lobby.StartBlockReason.Contains("新規セッション"), "Participant Start rejected; Experimenter requires a valid New Session");
             string modeBefore = exp.manager.CurrentMode.ToString(); a.lobby.SelectNormal(); Deliver(a); Tick();
             Check(exp.manager.CurrentMode.ToString() == modeBefore, "Participant cannot change mode via Lobby API");
             exp.lobby.SelectNormal(); Deliver(exp); Tick(2);
-            Check(group.All(e => e.manager.CurrentMode == ExperimentManager.ExperimentMode.Normal &&
-                ((TMP_Text)Get(UI(e), "modeDescription")).text == ExperimentLobbyUI.NormalDescription), "Normal mode and Japanese explanation update on every endpoint");
-            exp.lobby.NewSessionFromUI(); Deliver(exp); Tick(12);
+            Check(exp.session.DraftMode == ExperimentManager.ExperimentMode.Normal && exp.manager.CurrentMode.ToString() == modeBefore, "Draft selection preserves current mode");
+            exp.lobby.NewSessionFromUI(); exp.session.EnsureResetUI().ConfirmReset(); Deliver(exp); Tick(12);
             Check(group.All(e => !e.session.IsResettingSession && e.session.SessionEpoch == 1 && e.lobby.IsLobbyVisible), "New Session completes existing Reset ACK while keeping every client in Lobby");
             Check(exp.lobby.CanStart && !a.lobby.CanStart && !b.lobby.CanStart, "Only Experimenter can Start when Session and cohort are ready");
-            exp.Peer(2, ExperimentParticipantRegistry.RoleVariable, "Experimenter"); exp.registry.RefreshParticipants(); Call(UI(exp), "Update");
-            Check(exp.lobby.ConnectedParticipants == 1 && !exp.lobby.CanStart && !((UnityEngine.UI.Button)Get(UI(exp), "startButton")).interactable,
+            exp.Peer(2, ExperimentParticipantRegistry.RoleVariable, "Experimenter"); exp.registry.RefreshParticipants(); Call(UI(exp), "Update"); exp.session.EnsureResetUI().Refresh();
+            Check(exp.lobby.ConnectedParticipants == 1 && !exp.lobby.CanStart && !((UnityEngine.UI.Button)Get(exp.session.EnsureResetUI(), "startButton")).interactable,
                 "Missing Participant disables Start button");
             exp.Peer(2, ExperimentParticipantRegistry.RoleVariable, "Participant"); exp.registry.RefreshParticipants(); Tick();
             foreach (var e in group)
                 Check(UI(e).GetComponentsInChildren<TMP_Text>(true).All(t => t.font.HasCharacters(t.text)), "All Lobby text has Japanese/ASCII glyphs on client " + e.net.ClientNo);
             Capture(a, "Participant.png"); Capture(exp, "Experimenter.png");
             string session = exp.session.CurrentSessionId;
-            var startButton = (UnityEngine.UI.Button)Get(UI(exp), "startButton");
-            startButton.onClick.SetPersistentListenerState(0, UnityEngine.Events.UnityEventCallState.EditorAndRuntime); startButton.onClick.Invoke(); Deliver(exp); Tick(3);
+            var startButton = (UnityEngine.UI.Button)Get(exp.session.EnsureResetUI(), "startButton");
+            startButton.onClick.Invoke(); Deliver(exp); Tick(3);
             Check(group.All(e => e.lobby.IsExperimentStarted && !((GameObject)Get(UI(e), "contentRoot")).activeSelf), "Start button publishes a common marker and closes all Lobbies");
             Check(group.All(e => e.session.CurrentSessionId == session && e.session.SessionEpoch == 1), "Start never creates or resets Session automatically");
             Check(a.placements.IsSharedPlacementPhase && b.placements.IsSharedPlacementPhase && Main(a).All(c => c.GetComponent<Renderer>().enabled) &&
@@ -94,12 +94,12 @@ public static class ExperimentLobbyVerification
             Check(group.All(e => e.agreement.IsBoardConfirmed), "Normal Final Agreement still confirms the shared Board");
             Call(b.lobby, "ClearLocal"); Call(b.lobby, "Update");
             Check(b.lobby.IsExperimentStarted && b.manager.CurrentState == ExperimentManager.ExperimentState.Confirmed, "Same Session reconnect restores Start without resetting confirmed flow");
-            exp.lobby.NewSessionFromUI(); Deliver(exp); Tick(12);
+            exp.lobby.NewSessionFromUI(); exp.session.EnsureResetUI().ConfirmReset(); Deliver(exp); Tick(12);
             Check(group.All(e => e.lobby.IsLobbyVisible && !e.agreement.IsBoardConfirmed && !e.submission.IsLocalSubmitted && e.manager.CurrentState == ExperimentManager.ExperimentState.Idle),
                 "Reset returns to Lobby and clears Ready/Confirmed/Submit/State");
-            exp.lobby.SelectProposed(); Deliver(exp); Tick(2);
+            exp.lobby.SelectProposed(); Check(exp.session.ResetSession(), "Prepare Proposed Draft"); Deliver(exp); Tick(12);
             Check(group.All(e => e.manager.CurrentMode == ExperimentManager.ExperimentMode.Proposed &&
-                ((TMP_Text)Get(UI(e), "modeDescription")).text == ExperimentLobbyUI.ProposedDescription), "Proposed mode updates Japanese introduction on every endpoint");
+                (e.registry.IsLocalExperimenter || ((TMP_Text)Get(UI(e), "modeDescription")).text == ExperimentLobbyUI.ProposedDescription)), "Proposed mode updates Japanese introduction on every endpoint");
             Check(exp.lobby.StartExperiment(), "Experimenter can Start Proposed from valid current Session"); Deliver(exp); Tick(3);
             Check(a.privateBoard.IsVisible && a.privateBoard.CanInteract && b.privateBoard.CanInteract && !exp.privateBoard.IsVisible &&
                 group.All(e => Main(e).All(c => !c.GetComponent<Renderer>().enabled)), "Proposed Start enables only Participant Private boards and keeps Main hidden");
@@ -113,7 +113,7 @@ public static class ExperimentLobbyVerification
             a.agreement.ToggleLocalReady(); Deliver(a); b.agreement.ToggleLocalReady(); Deliver(b); Tick(4);
             Check(group.All(e => e.agreement.IsBoardConfirmed && e.view.DisplayedParticipantCount == 2), "Proposed Final Agreement preserves readonly initial reference UI");
             string previousStart = exp.net.GetGlobalVariable(ExperimentLobbyController.StartVariable);
-            exp.lobby.NewSessionFromUI(); Deliver(exp); Tick(12);
+            exp.lobby.NewSessionFromUI(); exp.session.EnsureResetUI().ConfirmReset(); Deliver(exp); Tick(12);
             Check(group.All(e => e.lobby.IsLobbyVisible && e.view.DisplayedParticipantCount == 0 && Main(e).All(c => c.CurrentTier == "Unclassified")),
                 "Reset after Proposed removes references, clears Main and returns all clients to Lobby");
             exp.Global(ExperimentLobbyController.StartVariable, previousStart); Deliver(exp); Tick(2);
