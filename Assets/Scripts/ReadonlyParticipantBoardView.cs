@@ -108,6 +108,7 @@ public class ReadonlyParticipantBoardView : MonoBehaviour
                 ((rows - 1) * 0.5f - row) * (boardSize.y + spacing.y) * canvasScale, 0);
             BuildBoard(board, p, snapshot.cardIds.Length);
         }
+        BuildCriteria(content.transform,cols,rows);
         displayedId = snapshot.id; DisplayedParticipantCount = count;
         content.SetActive(open);
         IsReferenceOpen = open;
@@ -176,6 +177,19 @@ public class ReadonlyParticipantBoardView : MonoBehaviour
         var button=rect.gameObject.AddComponent<UnityEngine.UI.Button>();button.targetGraphic=graphic;button.onClick.AddListener(()=>ToggleReference());
         var text=Label("Label",rect,title,new Vector2(-300,0),new Vector2(600,80),38,Color.white);text.alignment=TextAlignmentOptions.Center;
         return text;
+    }
+    private void BuildCriteria(Transform parent,int cols,int rows)
+    {
+        // Outside the existing answer boards: all card rows and photograph sizes stay intact.
+        float width=cols*boardSize.x+(cols-1)*spacing.x;
+        float height=cols>1?240:310;
+        var legend=Rect("TaskCriteria",parent,Vector2.zero,new Vector2(width,height));
+        legend.gameObject.AddComponent<Canvas>().renderMode=RenderMode.WorldSpace;
+        legend.localScale=Vector3.one*canvasScale;
+        legend.localPosition=new Vector3(0,-(rows*boardSize.y+(rows-1)*spacing.y)*canvasScale/2-(height/2+25)*canvasScale,0);
+        Panel("Surface",legend,Vector2.zero,legend.sizeDelta,new Color(.035f,.065f,.085f,.97f));
+        var label=Label("CriteriaLegend",legend,ParticipantUIStyle.CriteriaLegend(cols>1),new Vector2(-width/2+32,0),new Vector2(width-64,height-24),30,Color.white);
+        label.textWrappingMode=TextWrappingModes.Normal;
     }
     private void BuildBoard(RectTransform board, ProposedRevealCoordinator.Participant participant, int cardCount)
     {

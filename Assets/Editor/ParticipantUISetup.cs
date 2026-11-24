@@ -37,12 +37,24 @@ public static class ParticipantUISetup
             if (t.transform.parent != null && t.transform.parent.name == "CardName") continue;
             // No card geometry, slots or interactors are changed.
             var zone = t.GetComponentInParent<TierZone>();
-            if(zone != null && (t.text.Trim()=="U" || t.text.Trim()=="未分類" || "ABCDE".Contains(t.text.Trim()) && t.text.Trim().Length==1))
+            if(zone != null && t.name != "TierCaption" && (t.text.Trim()=="U" || t.text.Trim()=="未分類" || "ABCDE".Contains(t.text.Trim()) && t.text.Trim().Length==1))
                 t.text=zone.tierName=="Unclassified" ? "未分類" : zone.tierName;
-            if (t.name == "TierLabel" && t.transform.parent.name != "UnclassifiedRow") t.rectTransform.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical,160);
+            string rowName=t.transform.parent.name;
+            string displayTier=zone!=null?zone.tierName:rowName=="UnclassifiedRow"?"Unclassified":rowName.Length==8 && rowName.StartsWith("Tier") && rowName.EndsWith("Row")?rowName.Substring(4,1):"";
+            if(t.name=="TierCaption" && displayTier!="")
+            {
+                t.gameObject.SetActive(true);t.enabled=true;t.color=new Color(.78f,.88f,.90f);
+                t.text=ParticipantUIStyle.BoardTierCaption(displayTier);t.fontSize=32;t.textWrappingMode=TextWrappingModes.NoWrap;
+                t.rectTransform.sizeDelta=new Vector2(230,110);t.rectTransform.anchoredPosition=new Vector2(-1160,-95);
+            }
+            if (t.name == "TierLabel" && t.transform.parent.name != "UnclassifiedRow") { t.rectTransform.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical,160);t.rectTransform.anchoredPosition=new Vector2(-1160,50); }
             if (t.name == "TierLabel" && t.transform.parent.name == "UnclassifiedRow") { t.text = "未分類"; t.fontSize = 32; }
             if (t.name == "Title" && t.transform.parent.name == "TierBoardCanvas") { t.text = t.GetComponentInParent<PrivateTierBoardController>() != null ? "独立回答" : "共同分類"; t.rectTransform.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical,128); }
-            if (t.name == "Hint" && t.transform.parent.name == "TierBoardCanvas") { t.fontSize = 42; t.textWrappingMode = TextWrappingModes.Normal; }
+            if (t.name == "Hint" && t.transform.parent.name == "TierBoardCanvas")
+            { t.fontSize = 42; t.textWrappingMode = TextWrappingModes.Normal;
+              bool independent=t.GetComponentInParent<PrivateTierBoardController>()!=null;
+              t.text=independent?ParticipantUIStyle.IndependentInstruction:ParticipantUIStyle.SharedInstruction;
+              t.rectTransform.sizeDelta=new Vector2(2480,200);t.rectTransform.anchoredPosition=new Vector2(0,1390); }
             if (t.name == "Title" && t.transform.parent.name == "ResultContent") t.text = ExperimentResultUI.Title;
             if (t.name == "Title" && t.transform.parent.name == "ParticipantIntroduction") t.rectTransform.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical,152);
             if (t.name == "Description" && t.transform.parent.name == "ParticipantIntroduction") t.text = ExperimentLobbyUI.GeneralDescription;
@@ -52,6 +64,7 @@ public static class ParticipantUISetup
             if (t.transform.parent.name == "Waiting") t.text = "実験の準備をしています。";
             EditorUtility.SetDirty(t);
         }
+        foreach (var lobby in root.GetComponentsInChildren<ExperimentLobbyUI>(true)) lobby.ConfigurePresentation(true);
         foreach (var result in root.GetComponentsInChildren<ExperimentResultUI>(true)) result.ConfigurePresentation();
         foreach (var ui in root.GetComponentsInChildren<FinalAgreementUI>(true))
         {

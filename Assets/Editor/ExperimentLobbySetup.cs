@@ -81,7 +81,7 @@ public static class ExperimentLobbySetup
         EditorSceneManager.MarkSceneDirty(scene); EditorSceneManager.SaveScene(scene); Selection.activeGameObject = root;
         Debug.Log("[Lobby Setup] World-space Introduction + separate Experimenter controls saved to QuestSetup");
     }
-    public static void RefreshExisting() { Font(); var root=GameObject.Find("ExperimentLobby"); ((RectTransform)root.transform.Find("LobbyContent")).sizeDelta = new Vector2(3000,1500); root.transform.Find("LobbyContent/ExperimenterControls").gameObject.SetActive(false); EditorSceneManager.MarkSceneDirty(root.scene); EditorSceneManager.SaveScene(root.scene); }
+    public static void RefreshExisting() { Font(); var root=GameObject.Find("ExperimentLobby"); root.GetComponent<ExperimentLobbyUI>().ConfigurePresentation(true); root.transform.Find("LobbyContent/ExperimenterControls").gameObject.SetActive(false); EditorSceneManager.MarkSceneDirty(root.scene); EditorSceneManager.SaveScene(root.scene); }
     private static TMP_FontAsset Font()
     {
         ParticipantUISetup.UpdateFont();

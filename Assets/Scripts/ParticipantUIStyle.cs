@@ -8,7 +8,38 @@ public static class ParticipantUIStyle
     private static TMP_FontAsset font;
     private static readonly ConditionalWeakTable<Transform, object> styled = new ConditionalWeakTable<Transform, object>();
     public static TMP_FontAsset Font => font != null ? font : (font = Resources.Load<TMP_FontAsset>("ParticipantJapanese SDF"));
-    public const string SharedInstruction = "参加者同士で話し合い、最終的な分類結果を決めてください。";
+    public const string SharedInstruction = "参加者同士で話し合い、新入生歓迎イベントとしての適切さを評価してください。";
+    public const string IndependentInstruction = "新入生歓迎イベントとしての適切さを、自分の考えに基づいて評価してください。";
+    public const string UnclassifiedMeaning = "まだ分類されていません";
+    public static string TierMeaning(string tier)
+    {
+        switch (tier)
+        {
+            case "A": return "非常に適している";
+            case "B": return "やや適している";
+            case "C": return "どちらともいえない";
+            case "D": return "あまり適していない";
+            case "E": return "まったく適していない";
+            case "Unclassified": return UnclassifiedMeaning;
+            default: return "";
+        }
+    }
+    public static string BoardTierCaption(string tier)
+    {
+        switch(tier)
+        {
+            case "A": return "非常に\n適している";
+            case "B": return "やや\n適している";
+            case "C": return "どちらとも\nいえない";
+            case "D": return "あまり\n適していない";
+            case "E": return "まったく\n適していない";
+            case "Unclassified": return "まだ分類されて\nいません";
+            default: return "";
+        }
+    }
+    public static string CriteriaLegend(bool compact = false) => compact
+        ? "A：" + TierMeaning("A") + "　 B：" + TierMeaning("B") + "\nC：" + TierMeaning("C") + "\nD：" + TierMeaning("D") + "　 E：" + TierMeaning("E")
+        : "A：" + TierMeaning("A") + "\nB：" + TierMeaning("B") + "\nC：" + TierMeaning("C") + "\nD：" + TierMeaning("D") + "\nE：" + TierMeaning("E");
     public static void Apply(Transform root)
     {
         if (root == null || Font == null || styled.TryGetValue(root, out _)) return;
@@ -26,7 +57,7 @@ public static class ParticipantUIStyle
             case "TIER BOARD": return "共同分類";
             case "Place a card": return SharedInstruction;
             case "PRIVATE ANSWER": return "独立回答";
-            case "Only your answers are visible. Grab any card. Return to Unclassified to cancel.": return "画像カードを自分の考えに基づいて分類してください。";
+            case "Only your answers are visible. Grab any card. Return to Unclassified to cancel.": return IndependentInstruction;
             case "EXPERIMENT INTRODUCTION": return "実験の説明";
             case "CONNECTION": return "接続状態";
             case "TIER": return "分類先";

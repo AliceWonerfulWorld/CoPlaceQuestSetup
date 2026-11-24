@@ -117,7 +117,7 @@ public class PrivateTierBoardController : MonoBehaviour
         {
             string text = revealCoordinator != null && revealCoordinator.IsAnswerLocked && !revealCoordinator.HasRevealed ? "全員の回答を公開する準備をしています。" :
                 independentSubmission != null && independentSubmission.IsLocalLocked ? "提出した回答は操作できません。提出取消で変更できます。" :
-                CanInteract ? "画像カードを自分の考えに基づいて分類してください。\n未分類に戻すと、そのカードの回答を取り消せます。" : "接続と実験の準備を待っています。";
+                CanInteract ? ParticipantUIStyle.IndependentInstruction + "\n未分類に戻すと、そのカードの回答を取り消せます。" : "接続と実験の準備を待っています。";
             if (instructions.text != text) instructions.text = text;
         }
     }
