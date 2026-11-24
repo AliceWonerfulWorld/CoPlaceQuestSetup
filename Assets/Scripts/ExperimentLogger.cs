@@ -37,6 +37,9 @@ public sealed class ExperimentLogger : MonoBehaviour
     public string SaveStatus => !IsOperational ? "Loggerが無効です" : LastError != "" ? "保存失敗（詳細を確認してください）" : IsSaving ? "保存中" : pending.Count > 0 ? "保存待ち" : store == null ? "まだ保存対象ではありません" : "保存成功";
     public string FinalSaveStatus => finalAgreement == null || !finalAgreement.IsBoardConfirmed ? "まだ保存対象ではありません" : savedFinal.Contains(sessionManager.CurrentSessionId) ? "保存済み" : "未保存";
     public string IndependentSaveStatus => reveal == null || !reveal.HasRevealed || sessionManager.CurrentMode != ExperimentManager.ExperimentMode.Proposed ? "まだ保存対象ではありません" : savedIndependent.Contains(sessionManager.CurrentSessionId) ? "保存済み" : "未保存";
+    public bool AreRequiredAnswersSaved => sessionManager != null && finalAgreement != null && finalAgreement.IsBoardConfirmed &&
+        savedFinal.Contains(sessionManager.CurrentSessionId) &&
+        (sessionManager.CurrentMode != ExperimentManager.ExperimentMode.Proposed || savedIndependent.Contains(sessionManager.CurrentSessionId));
     internal void MarkPreparationRequested(string id) { if (IsOperational) preparedSession = id; }
     public bool RetrySave() { if (!IsOperational) return false; try { CaptureSnapshot(); Drain(); } catch (Exception error) { LastError = error.Message; } return pending.Count == 0 && LastError == ""; }
     public string LastError { get; private set; } = "";

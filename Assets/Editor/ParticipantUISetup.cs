@@ -44,9 +44,6 @@ public static class ParticipantUISetup
             if (t.name == "Title" && t.transform.parent.name == "TierBoardCanvas") { t.text = t.GetComponentInParent<PrivateTierBoardController>() != null ? "独立回答" : "共同分類"; t.rectTransform.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical,128); }
             if (t.name == "Hint" && t.transform.parent.name == "TierBoardCanvas") { t.fontSize = 42; t.textWrappingMode = TextWrappingModes.Normal; }
             if (t.name == "Title" && t.transform.parent.name == "ResultContent") t.text = ExperimentResultUI.Title;
-            if (t.name == "ConfirmedMessage") { t.text = ExperimentResultUI.Message; t.rectTransform.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical,88); }
-            if (t.name == "Title" && t.transform.parent.name == "ResultContent") t.rectTransform.anchoredPosition = new Vector2(0,128);
-            if (t.name == "WaitingMessage") t.text = ExperimentResultUI.Waiting;
             if (t.name == "Title" && t.transform.parent.name == "ParticipantIntroduction") t.rectTransform.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical,152);
             if (t.name == "Description" && t.transform.parent.name == "ParticipantIntroduction") t.text = ExperimentLobbyUI.GeneralDescription;
             if (t.transform.parent.name == "CurrentCondition" && t.name == "Heading") t.text = "提案方式 ／ 独立回答 → 共同分類";
@@ -55,6 +52,7 @@ public static class ParticipantUISetup
             if (t.transform.parent.name == "Waiting") t.text = "実験の準備をしています。";
             EditorUtility.SetDirty(t);
         }
+        foreach (var result in root.GetComponentsInChildren<ExperimentResultUI>(true)) result.ConfigurePresentation();
         foreach (var ui in root.GetComponentsInChildren<FinalAgreementUI>(true))
         {
             var main = root.GetComponentsInChildren<Canvas>(true).FirstOrDefault(c=>c.name=="TierBoardCanvas");

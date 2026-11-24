@@ -24,6 +24,8 @@ public class ReadonlyParticipantBoardView : MonoBehaviour
     private ExperimentParticipantRegistry registry;
     private ExperimentSessionManager session;
     private Camera xrCamera;
+    private ExperimentManager experiment;
+    private bool ParticipantFinished => registry != null && registry.IsLocalParticipant && experiment != null && experiment.CurrentState == ExperimentManager.ExperimentState.Confirmed;
     private GameObject referenceControls;
     private Transform closeControl;
     private TMP_Text toggleLabel;
@@ -33,7 +35,7 @@ public class ReadonlyParticipantBoardView : MonoBehaviour
     private string preferenceSession, preferenceReveal;
     private long preferenceEpoch;
     public bool IsReferenceOpen { get; private set; }
-    private bool HasCurrentContent => content != null && session != null && !session.IsResettingSession && session.CurrentMode == ExperimentManager.ExperimentMode.Proposed &&
+    private bool HasCurrentContent => content != null && !ParticipantFinished && session != null && !session.IsResettingSession && session.CurrentMode == ExperimentManager.ExperimentMode.Proposed &&
         preferenceSession == session.CurrentSessionId && preferenceEpoch == session.SessionEpoch && revealCoordinator != null && revealCoordinator.HasRevealed && revealCoordinator.RevealId == displayedId;
     public bool CanToggleReference => registry != null && registry.IsLocalParticipant && HasCurrentContent;
     private readonly Dictionary<string, CardVisual> visuals = new Dictionary<string, CardVisual>();
@@ -50,6 +52,7 @@ public class ReadonlyParticipantBoardView : MonoBehaviour
         if (!layoutCaptured) { fixedPosition = transform.position; fixedRotation = transform.rotation; layoutCaptured = true; }
         var all = gameObject.scene.GetRootGameObjects();
         registry = all.SelectMany(o=>o.GetComponentsInChildren<ExperimentParticipantRegistry>(true)).SingleOrDefault();
+        experiment = all.SelectMany(o=>o.GetComponentsInChildren<ExperimentManager>(true)).SingleOrDefault();
         session = all.SelectMany(o=>o.GetComponentsInChildren<ExperimentSessionManager>(true)).SingleOrDefault();
         xrCamera = all.SelectMany(o=>o.GetComponentsInChildren<Camera>(true)).FirstOrDefault(c=>c.CompareTag("MainCamera"));
         if (cardVisuals != null) foreach (var v in cardVisuals) if (v != null && !string.IsNullOrEmpty(v.cardId)) visuals[v.cardId] = v;
@@ -75,7 +78,7 @@ public class ReadonlyParticipantBoardView : MonoBehaviour
     private ProposedRevealCoordinator.Snapshot CurrentSnapshot()
     {
         var s = revealCoordinator != null && revealCoordinator.CanDisplayReveal ? revealCoordinator.GetRevealedSnapshot() : null;
-        return s != null && session != null && !session.IsResettingSession && session.CurrentMode == ExperimentManager.ExperimentMode.Proposed &&
+        return !ParticipantFinished && s != null && session != null && !session.IsResettingSession && session.CurrentMode == ExperimentManager.ExperimentMode.Proposed &&
             s.sessionId == session.CurrentSessionId && s.epoch == session.SessionEpoch ? s : null;
     }
     public void Refresh()
@@ -219,10 +222,10 @@ public class ReadonlyParticipantBoardView : MonoBehaviour
         if (pilot && registry != null && registry.IsLocalParticipant)
         {
             Panel("CardSurface",card,Vector2.zero,card.sizeDelta,new Color(.025f,.045f,.06f));
-            float h=Mathf.Min(height-26,(width-10)/(692f/296f));
-            var image=Rect("CardImage",card,new Vector2(0,14),new Vector2(h*692f/296f,h)).gameObject.AddComponent<UnityEngine.UI.RawImage>();
+            float h=Mathf.Min(height-8,(width-8)/(692f/296f));
+            var image=Rect("CardImage",card,Vector2.zero,new Vector2(h*692f/296f,h)).gameObject.AddComponent<UnityEngine.UI.RawImage>();
             image.texture=visual != null ? visual.texture : null;image.uvRect=PilotCardFace.PhotographUv;image.raycastTarget=false;
-            var id=Label("CardId",card,cardId,new Vector2(-width/2+4,-height/2+14),new Vector2(width-8,28),16,Color.white);id.alignment=TextAlignmentOptions.Center;
+            // Card ID remains the internal object/data key, never participant-facing text.
         }
         else if (pilot)
             PilotCardFace.Populate(card, cardId, visual != null ? visual.displayName : cardId, visual != null ? visual.texture : null, font, true);
