@@ -177,7 +177,7 @@ public static class ExperimentResultVerification
                 Set(logger, "store", new ExperimentCsvLogStore(blocked));
                 logger.RecordEvent("BOARD_CONFIRMED", oldId + ":BOARD_CONFIRMED");
                 exp.session.RequestResetFromUI(); resetUI.ConfirmReset();
-                Check(exp.session.CurrentSessionId == oldId && !exp.session.IsResettingSession && resetUI.StatusMessage.Contains("失敗"),
+                Check(exp.session.CurrentSessionId == oldId && !exp.session.IsResettingSession && !resetUI.CanReset && !resetUI.IsConfirmationOpen && resetUI.PreparationActionLabel == "保存を再試行する" && !exp.session.ResetSession(),
                     "Unsaved CSV blocks Reset and UI reports failure without replacing Session");
                 Set(logger, "store", savedStore);
                 Check(logger.TryFlushBeforeReset(), "Pending old-Session CSV can be flushed safely after storage recovery");

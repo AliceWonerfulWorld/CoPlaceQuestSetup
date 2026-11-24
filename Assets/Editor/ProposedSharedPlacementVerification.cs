@@ -36,7 +36,7 @@ public static class ProposedSharedPlacementVerification
                     {
                         Call(e.submission, "Update"); Call(e.placements, "Update"); Call(e.agreement, "Update");
                         Set(e.shared, "nextInitializationAttempt", 0f); Call(e.shared, "Update");
-                        Call(e.privateBoard, "Update"); Call(e.components.OfType<FinalAgreementUI>().Single(), "Update");
+                        Call(e.privateBoard, "Update"); Call(e.view,"Update"); Call(e.components.OfType<FinalAgreementUI>().Single(), "Update");
                         Call(e.answers, "LateUpdate"); Set(e.reveal, "nextAttempt", 0f); Call(e.reveal, "LateUpdate");
                         Call(e.agreement, "LateUpdate");
                     }
@@ -97,11 +97,11 @@ public static class ProposedSharedPlacementVerification
             Check(pair.All(e => e.agreement.IsBoardConfirmed && e.manager.CurrentState == ExperimentManager.ExperimentState.Confirmed &&
                 e.placements.CardIds.All(id => e.placements.IsCardConfirmed(id))), "All Participant Ready -> Proposed Board Confirmed on both endpoints");
             Check(pair.All(e => !e.placements.SendPlacement("Card_01", "B") && !Main(e)[0].Process(null, null)), "Confirmed shared board rejects further placement and XR Grab");
-            Check(pair.All(e => e.view.DisplayedParticipantCount == 2 && JsonUtility.ToJson(e.reveal.GetRevealedSnapshot()) == initial), "Initial answer references remain visible and unchanged after final confirmation");
+            Check(pair.All(e => !e.view.IsReferenceOpen && !e.view.CanToggleReference && JsonUtility.ToJson(e.reveal.GetRevealedSnapshot()) == initial), "Initial answers remain unchanged while reference UI closes after final confirmation");
             Capture(a);
             Call(a.shared, "ClearLocal"); Call(a.reveal, "ClearLocal"); Call(a.reveal, "LateUpdate"); Call(a.shared, "Update"); Call(a.privateBoard, "Update");
             Check(a.shared.IsActive && a.agreement.IsBoardConfirmed && Main(a).Select(c => c.CurrentTier).SequenceEqual(new[] { "C", "C", "D" }) &&
-                a.view.DisplayedParticipantCount == 2, "Reconnect restores final shared board, confirmation and initial references without resetting Main");
+                !a.view.IsReferenceOpen && !a.view.CanToggleReference && JsonUtility.ToJson(a.reveal.GetRevealedSnapshot()) == initial, "Reconnect restores confirmed board and retained initial answers without reopening finished reference UI");
             Check(a.manager.CurrentState == ExperimentManager.ExperimentState.Confirmed, "Reveal reconnect does not regress Confirmed to Revealed");
             Check(!host.placements.CanLocalEditSharedBoard, "Experimenter can view references/Main but cannot edit Proposed Main");
             long previousEpoch=a.session.SessionEpoch;

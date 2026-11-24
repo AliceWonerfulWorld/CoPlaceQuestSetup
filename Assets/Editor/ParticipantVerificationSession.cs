@@ -38,6 +38,7 @@ public static class ParticipantVerificationSession
             foreach(var ui in e.components.OfType<IndependentAnswerSubmissionUI>()) Call(ui,"Update");
             foreach(var ui in e.components.OfType<FinalAgreementUI>()) Call(ui,"Update");
             foreach(var ui in e.components.OfType<ExperimentLobbyUI>()) Call(ui,"Update");
+            Call(e.view,"Update");
             foreach(var ui in e.components.OfType<ExperimentResultUI>()) ui.Refresh();
             foreach(var to in group) if(e!=to) ProposedRevealVerification.Deliver(e,to);
         }

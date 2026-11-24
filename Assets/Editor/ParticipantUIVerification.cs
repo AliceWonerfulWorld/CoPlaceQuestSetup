@@ -47,6 +47,9 @@ public static class ParticipantUIVerification
                 {
                     string tag=count+"/"+set+"/"+mode;
                     ParticipantVerificationSession.Prepare(host,people,mode,set,true);
+                    Check(people.All(e=>!e.components.OfType<ExperimentResultUI>().Single().IsVisible),tag+" no completion panel before confirmation");
+                    var management=host.session.GetComponent<SessionResetUI>(); management.Refresh();
+                    Check(management.PreparationActionLabel=="実験を中断する",tag+" active experiment uses abort action");
                     Check(previousCsv.All(p=>File.ReadAllBytes(p.Key).SequenceEqual(p.Value)),tag+" previous answer CSV bytes preserved");
                     Check(people.All(e=>e.view.DisplayedParticipantCount==0 && !e.view.IsReferenceOpen && !e.view.CanToggleReference),tag+" no reference before committed Reveal");
                     Check(people.All(e=>e.scene.GetRootGameObjects().All(o=>o.name!="ExperimenterControlPanel")),tag+" management panel absent on Participant");
@@ -78,6 +81,14 @@ public static class ParticipantUIVerification
                         var panel=a.view.transform.Find("ReadonlyMiniBoards");
                         Check(panel.GetComponentsInChildren<UnityEngine.UI.Selectable>(true).Length==0 && panel.GetComponentsInChildren<Collider>(true).Length==0,tag+" answer content has no interactions");
                         Check(panel.GetComponentsInChildren<TMP_Text>(true).Any(t=>t.text.Contains("あなた")) && !panel.GetComponentsInChildren<TMP_Text>(true).Any(t=>t.text.Contains("Client")),tag+" local identity without technical IDs");
+                        Check(!panel.GetComponentsInChildren<TMP_Text>(true).Any(t=>t.name=="CardId" || ids.Contains(t.text)),tag+" reference Card IDs never rendered");
+                        var expectedVisuals=Get<ReadonlyParticipantBoardView.CardVisual[]>(a.view,"cardVisuals").ToDictionary(v=>v.cardId);
+                        foreach(var image in panel.GetComponentsInChildren<UnityEngine.UI.RawImage>(true))
+                        {
+                            string id=image.transform.parent.name;
+                            Check(expectedVisuals.ContainsKey(id) && image.texture==expectedVisuals[id].texture && image.uvRect==PilotCardFace.PhotographUv,tag+" photo matches committed card "+id);
+                            Check(((RectTransform)image.transform).anchoredPosition==Vector2.zero && ((RectTransform)image.transform).rect.height<=((RectTransform)image.transform.parent).rect.height-7,tag+" centered photo uses former ID area "+id);
+                        }
                         var camera=a.scene.GetRootGameObjects().SelectMany(o=>o.GetComponentsInChildren<Camera>(true)).First(c=>c.CompareTag("MainCamera"));
                         var position=a.view.transform.position;camera.transform.position+=Vector3.right*.2f;ParticipantVerificationSession.Call(a.view,"Update");
                         Check(a.view.transform.position==position,tag+" reference remains world anchored when head moves");camera.transform.position-=Vector3.right*.2f;
@@ -109,11 +120,38 @@ public static class ParticipantUIVerification
                     foreach(var e in people.Skip(1)) e.agreement.ToggleLocalReady();ParticipantVerificationSession.Tick(group,6);
                     Check(people.All(e=>e.agreement.IsBoardConfirmed && e.components.OfType<ExperimentResultUI>().Single().IsVisible),tag+" final agreement and Japanese Result");
                     Check(people.All(e=>e.components.OfType<ExperimentResultUI>().Single().GetComponentsInChildren<UnityEngine.UI.Button>().Length==0),tag+" participant Result has no management button");
-                    if(count==2 && set=="A") Capture(a,"result",a.components.OfType<ExperimentResultUI>().Single().transform,.8f);
+                    Check(people.All(e=>!e.view.IsReferenceOpen && !e.view.CanToggleReference && !e.view.ToggleReference()),tag+" completion closes reference and disables reopening");
+                    Check(people.All(e=>!e.components.OfType<FinalAgreementUI>().Single().GetComponent<Canvas>().enabled),tag+" completion hides agreement controls");
+                    var result=a.components.OfType<ExperimentResultUI>().Single();
+                    var resultPanel=Get<GameObject>(result,"contentRoot");
+                    var eye=a.scene.GetRootGameObjects().SelectMany(o=>o.GetComponentsInChildren<Camera>(true)).First(c=>c.CompareTag("MainCamera"));
+                    Check(Mathf.Abs(Vector3.Distance(resultPanel.transform.position,eye.transform.position)-1.4f)<.01f && Vector3.Dot((resultPanel.transform.position-eye.transform.position).normalized,eye.transform.forward)>.999f,tag+" completion panel is summoned in view at 1.4m");
+                    Check(!MainCanvas(a).transform.Find("Hint").GetComponent<TMP_Text>().enabled,tag+" completion hides shared task instructions");
+                    var resultPosition=resultPanel.transform.position;eye.transform.position+=Vector3.right*.2f;result.Refresh();
+                    Check(resultPanel.transform.position==resultPosition,tag+" completion panel remains world anchored");eye.transform.position-=Vector3.right*.2f;
+                    if(count==2 && set=="A") Capture(a,"result-"+mode,resultPanel.transform,.50f);
                     var logger=host.components.OfType<ExperimentLogger>().Single();
                     string folder=Path.Combine(logger.OutputDirectory,host.session.CurrentSessionId);
                     Check(logger.FinalSaveStatus=="保存済み" && ExperimentCsvLogStore.ReadCsv(Path.Combine(folder,"final_placements.csv")).Count==ids.Length+1,tag+" final CSV saved");
                     if(mode==ExperimentManager.ExperimentMode.Proposed) Check(logger.IndependentSaveStatus=="保存済み" && ExperimentCsvLogStore.ReadCsv(Path.Combine(folder,"independent_answers.csv")).Count==ids.Length*count+1,tag+" independent CSV matrix saved");
+                    management.Refresh();Check(management.CanReset && management.PreparationActionLabel=="次のセッションを準備する",tag+" normal completion offers next session");
+                    if(count==1 && set=="A") ExperimenterControlPanelVerification.Capture(host,"completed-"+mode);
+                    // Exercise the actual IO error + queue guard only in this test's isolated root.
+                    if(count==1 && set=="A")
+                    {
+                        var saved=Get<HashSet<string>>(logger,"savedFinal");saved.Remove(host.session.CurrentSessionId);management.Refresh();
+                        Check(!management.CanReset && management.PreparationActionLabel=="実験データを保存しています",tag+" finalized differs from final CSV saved");if(mode==ExperimentManager.ExperimentMode.Normal) ExperimenterControlPanelVerification.Capture(host,"completed-saving-simulated");saved.Add(host.session.CurrentSessionId);
+                        string failureRoot=Path.GetFullPath("Library/ParticipantCompletionFailure-"+Guid.NewGuid().ToString("N"));
+                        File.WriteAllText(failureRoot,"isolated test blocks output directory");
+                        var originalStore=Get<object>(logger,"store");ParticipantVerificationSession.Set(logger,"store",new ExperimentCsvLogStore(failureRoot));
+                        logger.RecordEvent("TEST_SAVE_FAILURE",Guid.NewGuid().ToString("N"));management.Refresh();
+                        if(mode==ExperimentManager.ExperimentMode.Normal) ExperimenterControlPanelVerification.Capture(host,"completed-save-error");
+                        string unchanged=host.session.CurrentSessionId;
+                        Check(!management.CanReset && management.PreparationActionLabel=="保存を再試行する" && !host.session.StartNewSession() && host.session.CurrentSessionId==unchanged,tag+" save failure blocks UI and existing Reset API");
+                        File.Delete(failureRoot);Check(logger.RetrySave() && host.session.CurrentSessionId==unchanged,tag+" queued save recovery never issues new Session");
+                        ParticipantVerificationSession.Set(logger,"store",originalStore);management.Refresh();
+                        Check(management.CanReset && management.PreparationActionLabel=="次のセッションを準備する",tag+" save recovery restores next preparation");
+                    }
                     foreach(string file in Directory.GetFiles(folder,"*.csv")) previousCsv[file]=File.ReadAllBytes(file);
                     foreach(var e in people) foreach(var t in e.scene.GetRootGameObjects().SelectMany(o=>o.GetComponentsInChildren<TMP_Text>()).Where(t=>t.isActiveAndEnabled && (t.GetComponentInParent<Canvas>()==null || t.GetComponentInParent<Canvas>().enabled)))
                     {
@@ -122,6 +160,13 @@ public static class ParticipantUIVerification
                         if (t.GetComponentInParent<PilotCardFace>() == null && t.text != "" && t.font == ParticipantUIStyle.Font)
                             Check(t.preferredHeight <= t.rectTransform.rect.height + 2 && !t.isTextOverflowing, tag+" text fits "+t.name+" / "+t.transform.parent.name);
                     }
+                    string completedSession=host.session.CurrentSessionId;
+                    management.RequestConfirmation();
+                    Check(management.IsConfirmationOpen && !Get<TMP_Text>(management,"prompt").text.Contains("中断"),tag+" normal next-session dialog is not an abort");
+                    management.ConfirmReset();foreach(var peer in people) ProposedRevealVerification.Deliver(host,peer);ParticipantVerificationSession.Tick(group,16);
+                    Check(host.session.CurrentSessionId!=completedSession && !host.session.IsResettingSession && people.All(e=>!e.components.OfType<ExperimentResultUI>().Single().IsVisible && !e.view.IsReferenceOpen),tag+" next-session Reset clears finished UI and reference");
+                    Check(MainCanvas(a).transform.Find("Hint").GetComponent<TMP_Text>().enabled,tag+" Reset restores task instructions for next trial");
+                    Check(!ExperimentCsvLogStore.ReadCsv(Path.Combine(folder,"phase_events.csv")).Skip(1).Any(row=>row[3]=="SESSION_ABORTED"),tag+" normal completion never records SESSION_ABORTED");
                 }
                 ParticipantVerificationSession.Prepare(host,people,ExperimentManager.ExperimentMode.Normal,"A",false);
                 Check(people.All(e=>!e.view.IsReferenceOpen && e.view.DisplayedParticipantCount==0),"Reset removes prior panel and answers / "+count);
