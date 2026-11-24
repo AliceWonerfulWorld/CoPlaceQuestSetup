@@ -32,6 +32,10 @@ public static class ParticipantUIVerification
         }
         try
         {
+            var tierNames=new[]{"A","B","C","D","E","Unclassified"};
+            var meanings=new[]{"非常に適している","やや適している","どちらともいえない","あまり適していない","まったく適していない","まだ分類されていません"};
+            for(int index=0;index<tierNames.Length;index++)Check(ParticipantUIStyle.TierMeaning(tierNames[index])==meanings[index],"specified rating meaning "+tierNames[index]);
+            Check(ParticipantUIStyle.SharedInstruction=="参加者同士で話し合い、新入生歓迎イベントとしての適切さを評価してください。","shared instruction matches common task");
             for(int count=1;count<=2;count++)
             {
                 var people=Enumerable.Range(1,count).Select(i=>ProposedRevealVerification.CreateEndpoint(i,count,true)).ToArray();owned.AddRange(people);
@@ -46,7 +50,36 @@ public static class ParticipantUIVerification
                 foreach(string set in new[]{"A","B"}) foreach(var mode in new[]{ExperimentManager.ExperimentMode.Normal,ExperimentManager.ExperimentMode.Proposed})
                 {
                     string tag=count+"/"+set+"/"+mode;
-                    ParticipantVerificationSession.Prepare(host,people,mode,set,true);
+                    ParticipantVerificationSession.Prepare(host,people,mode,set,false);
+                    foreach(var e in people)
+                    {
+                        var intro=e.components.OfType<ExperimentLobbyUI>().Single();ParticipantVerificationSession.Call(intro,"Update");
+                        intro.ConfigurePresentation(true);intro.ConfigurePresentation(true);
+                        var labels=intro.GetComponentsInChildren<TMP_Text>(true);
+                        Check(labels.Count(t=>t.name=="TaskCriteria")==1 && labels.Count(t=>t.name=="StepsHeading")==1,tag+" repeated presentation regeneration never duplicates labels");
+                        foreach(var expected in new[]{ExperimentLobbyUI.TaskTitle,ExperimentLobbyUI.GeneralDescription,ExperimentLobbyUI.JudgementGuide,ExperimentLobbyUI.JudgementNote,ExperimentLobbyUI.TaskGoal,ExperimentLobbyUI.ClassificationRules,ParticipantUIStyle.CriteriaLegend()})
+                            Check(labels.Any(t=>t.text==expected),tag+" common task includes "+expected.Split('\n')[0]);
+                        Check(Get<TMP_Text>(intro,"modeDescription").text==(mode==ExperimentManager.ExperimentMode.Normal?ExperimentLobbyUI.NormalDescription:ExperimentLobbyUI.ProposedDescription),tag+" applied mode selects exact neutral steps");
+                        Check(!labels.Any(t=>new[]{"反映されやす","公平な話し合い","採用したい","有力候補","正解です"}.Any(word=>t.text.Contains(word))),tag+" no hypothesis or preferred answer in task UI");
+                        CheckText(e,tag+" prepared Lobby");
+                    }
+                    var opposite=mode==ExperimentManager.ExperimentMode.Normal?ExperimentManager.ExperimentMode.Proposed:ExperimentManager.ExperimentMode.Normal;
+                    host.session.SetDraft(opposite,set,count);
+                    var lobbyUI=a.components.OfType<ExperimentLobbyUI>().Single();ParticipantVerificationSession.Call(lobbyUI,"Update");
+                    Check(Get<TMP_Text>(lobbyUI,"modeDescription").text==(mode==ExperimentManager.ExperimentMode.Normal?ExperimentLobbyUI.NormalDescription:ExperimentLobbyUI.ProposedDescription),tag+" next Draft never replaces applied task steps");
+                    host.session.SetDraft(mode,set,count);
+                    if(count==2 && set=="A")Capture(a,"lobby-"+mode,a.lobby.transform,1.0f);
+                    Check(host.lobby.StartExperiment(),tag+" prepared session starts without extra task confirmation");
+                    foreach(var peer in people)ProposedRevealVerification.Deliver(host,peer);ParticipantVerificationSession.Tick(group,4);
+                    foreach(var canvas in new[]{MainCanvas(a),PrivateCanvas(a)})
+                    {
+                        foreach(string tier in new[]{"A","B","C","D","E","Unclassified"})
+                        {
+                            var row=canvas.transform.Find(tier=="Unclassified"?"UnclassifiedRow":"Tier"+tier+"Row");
+                            Check(row.Find("TierCaption").gameObject.activeSelf && row.Find("TierCaption").GetComponent<TMP_Text>().enabled && row.Find("TierCaption").GetComponent<TMP_Text>().text.Replace("\n","")==ParticipantUIStyle.TierMeaning(tier),tag+" matching "+canvas.transform.parent.name+" rating "+tier);
+                        }
+                    }
+                    Check(MainCanvas(a).transform.Find("Hint").GetComponent<TMP_Text>().text==ParticipantUIStyle.SharedInstruction,tag+" common shared-task instruction in both modes");
                     Check(people.All(e=>!e.components.OfType<ExperimentResultUI>().Single().IsVisible),tag+" no completion panel before confirmation");
                     var management=host.session.GetComponent<SessionResetUI>(); management.Refresh();
                     Check(management.PreparationActionLabel=="実験を中断する",tag+" active experiment uses abort action");
@@ -58,6 +91,7 @@ public static class ParticipantUIVerification
                     {
                         var ui=a.components.OfType<IndependentAnswerSubmissionUI>().Single();ParticipantVerificationSession.Call(ui,"Update");
                         CheckText(a,tag+" independent");
+                        Check(PrivateCanvas(a).transform.Find("Hint").GetComponent<TMP_Text>().text.StartsWith(ParticipantUIStyle.IndependentInstruction),tag+" independent-task instruction uses personal evaluation");
                         Check(Get<TMP_Text>(ui,"status").text.Contains("0 / "+ids.Length),tag+" count derived from current answer IDs");
                         var privateConnection=Get<object>(a.net,"_connectionManager");privateConnection.GetType().GetMethod("Disconnect").Invoke(privateConnection,null);
                         ParticipantVerificationSession.Call(ui,"Update");Check(Get<TMP_Text>(ui,"status").text.Contains("接続を待っています"),tag+" private disconnection is explained without asking to classify again");
@@ -79,6 +113,7 @@ public static class ParticipantUIVerification
                         Check(host.view.DisplayedParticipantCount==count && !host.view.CanToggleReference,tag+" experimenter fixed read-only view retained");
                         string snapshot=JsonUtility.ToJson(a.reveal.GetRevealedSnapshot());
                         var panel=a.view.transform.Find("ReadonlyMiniBoards");
+                        Check(panel.GetComponentsInChildren<TMP_Text>(true).Any(t=>t.name=="CriteriaLegend" && t.text==ParticipantUIStyle.CriteriaLegend(count>1)),tag+" reference uses same rating legend without reducing images");
                         Check(panel.GetComponentsInChildren<UnityEngine.UI.Selectable>(true).Length==0 && panel.GetComponentsInChildren<Collider>(true).Length==0,tag+" answer content has no interactions");
                         Check(panel.GetComponentsInChildren<TMP_Text>(true).Any(t=>t.text.Contains("あなた")) && !panel.GetComponentsInChildren<TMP_Text>(true).Any(t=>t.text.Contains("Client")),tag+" local identity without technical IDs");
                         Check(!panel.GetComponentsInChildren<TMP_Text>(true).Any(t=>t.name=="CardId" || ids.Contains(t.text)),tag+" reference Card IDs never rendered");
@@ -200,6 +235,11 @@ public static class ParticipantUIVerification
         var corners=new Vector3[4];bool any=false;Bounds bounds=new Bounds(center,Vector3.zero);
         foreach(var canvas in focus.GetComponentsInChildren<Canvas>())
             if(canvas.enabled) { ((RectTransform)canvas.transform).GetWorldCorners(corners); foreach(var corner in corners) { if(!any) {bounds=new Bounds(corner,Vector3.zero);any=true;} else bounds.Encapsulate(corner); } }
+        if(focus==e.view.transform && e.view.IsReferenceOpen)
+        {
+            var close=e.scene.GetRootGameObjects().FirstOrDefault(o=>o.name=="IndependentReferenceControls")?.transform.Find("ReferenceClose") as RectTransform;
+            if(close!=null && close.gameObject.activeInHierarchy){close.GetWorldCorners(corners);foreach(var corner in corners)bounds.Encapsulate(corner);}
+        }
         if(any) { center=bounds.center; size=Mathf.Max(size,bounds.size.y*.55f,bounds.size.x/1.5f*.55f); }
         cam.orthographicSize=size;
         cam.transform.SetPositionAndRotation(center-focus.forward*4,focus.rotation);cam.clearFlags=CameraClearFlags.SolidColor;cam.backgroundColor=new Color(.018f,.03f,.044f);

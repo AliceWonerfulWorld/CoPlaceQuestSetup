@@ -1,0 +1,77 @@
+{
+  "environment": "Unity 6000.3.17f1 / isolated cloned project / offline preview scenes / isolated GUID logs / NOT Quest hardware",
+  "tests": {
+    "participantUI": {
+      "passed": true,
+      "checks": 2659,
+      "failure": "",
+      "observedAtUtc": "2026-11-24T06:22:37.015444+00:00"
+    },
+    "reveal": {
+      "passed": true,
+      "checks": 74,
+      "failure": "",
+      "observedAtUtc": "2026-11-24T06:17:19.561717+00:00"
+    },
+    "sharedPlacement": {
+      "passed": true,
+      "checks": 44,
+      "failure": "",
+      "observedAtUtc": "2026-11-24T06:17:19.925636+00:00"
+    },
+    "submission": {
+      "passed": true,
+      "checks": 14,
+      "failure": "",
+      "observedAtUtc": "2026-11-24T06:17:20.094353+00:00"
+    },
+    "lobby": {
+      "passed": true,
+      "checks": 39,
+      "failure": "",
+      "observedAtUtc": "2026-11-24T06:17:20.464641+00:00"
+    },
+    "result": {
+      "passed": true,
+      "checks": 78,
+      "failure": "",
+      "observedAtUtc": "2026-11-24T06:17:21.688732+00:00"
+    },
+    "logger": {
+      "passed": true,
+      "checks": 29,
+      "failure": "",
+      "observedAtUtc": "2026-11-24T06:17:21.696660+00:00"
+    },
+    "management": {
+      "passed": true,
+      "checks": 209,
+      "failure": "",
+      "observedAtUtc": "2026-11-24T06:17:24.129220+00:00"
+    },
+    "pilot": {
+      "passed": true,
+      "checks": 433,
+      "failure": "",
+      "observedAtUtc": "2026-11-24T06:17:25.386402+00:00"
+    },
+    "cardDrop": {
+      "passed": true,
+      "checks": 1163,
+      "failure": "",
+      "observedAtUtc": "2026-11-24T06:17:28.582984+00:00"
+    },
+    "answerLogging": {
+      "passed": true,
+      "checks": 378,
+      "failure": "",
+      "observedAtUtc": "2026-11-24T06:17:27.272867+00:00"
+    },
+    "answerStore": {
+      "passed": true,
+      "checks": 18,
+      "failure": "",
+      "observedAtUtc": "2026-11-24T06:17:27.281191+00:00"
+    }
+  }
+}

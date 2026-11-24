@@ -1,0 +1,25 @@
+{
+    "passed": true,
+    "root": "/Users/alisunsun/CoPlaceQuestSetup/Temp/TaskCriteriaVerificationProject/Library/AnswerSnapshotStoreVerification/9018a041b58c4a77ae4c373942cf1562",
+    "failure": "",
+    "checks": [
+        "8 final cards persisted",
+        "duplicate final preserves exact original bytes and observed time",
+        "conflicting final cannot overwrite",
+        "conflicting final leaves bytes intact",
+        "same Session wrong Epoch rejected",
+        "same Session wrong Set rejected",
+        "snapshot cannot precede matching Session Start",
+        "unconfirmed event cannot persist final",
+        "2 participants x 8 independent rows",
+        "duplicate Reveal preserves exact bytes",
+        "different committed snapshot cannot overwrite",
+        "changed independent answer rejected",
+        "incomplete participant/card matrix rejected",
+        "invalid selected-at rejected",
+        "Normal cannot write independent answers",
+        "all rejected independent writes leave original bytes intact",
+        "1 participant x 3 development answers",
+        "answer CSV UTF-8 BOM"
+    ]
+}

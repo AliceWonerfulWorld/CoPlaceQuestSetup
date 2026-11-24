@@ -1,0 +1,20 @@
+{
+    "passed": true,
+    "checks": [
+        "Unanswered state disables Japanese Submit button",
+        "Submit callback is separate from Final Agreement Ready",
+        "World Space raycaster and embedded Japanese glyphs exist",
+        "All valid local answers enable Submit",
+        "Invalid selectedAt blocks Submit",
+        "Actual button callback submits and updates local readonly/waiting UI",
+        "Submit blocks candidate data edits and XR select filters",
+        "Independent Submit never makes Final Agreement Ready",
+        "Submitted Participant can cancel while peer has not submitted",
+        "Actual cancel button restores editing after echo",
+        "Cancelled Participant can change answer and submit again",
+        "Submitted UI/interaction state restores from server variables on reconnect",
+        "Peer explicitly submits completed answers",
+        "All submitted commits common Reveal, hides Submit panel and rejects cancel"
+    ],
+    "failure": ""
+}
