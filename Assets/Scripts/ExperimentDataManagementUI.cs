@@ -3,88 +3,125 @@ using System.Linq;
 using TMPro;
 using UnityEngine;
 
-// Owned by the existing PC-only management Canvas; no participant UI or network state.
+// PC-only inputs; all changes remain Draft until the existing Reset confirmation.
 public sealed class ExperimentDataManagementUI
 {
     readonly ExperimentLogger logger;
     readonly ExperimentParticipantRegistry registry;
-    readonly Transform panel;
+    readonly Transform panel, advanced;
     readonly TMP_FontAsset font;
-    TMP_InputField pair,p1,p2,notes,verification;
-    TMP_Text summary,error,connections;
-    int client1=-1,client2=-1;
-    string message="";
-    public ExperimentDataManagementUI(ExperimentLogger log,ExperimentParticipantRegistry roles,Transform parent,TMP_FontAsset japanese)
+    readonly TMP_InputField pair,p1,p2,manualPair,manual1,manual2,notes,verification;
+    readonly TMP_Dropdown device1,device2,method;
+    readonly TMP_Text summary,connections,error;
+    readonly UnityEngine.UI.Button bind1,bind2;
+    readonly UnityEngine.UI.Button[] groups=new UnityEngine.UI.Button[4];
+    readonly GameObject secondRow;
+    int[] clients=new int[0];
+    string[] keys=new string[0];
+    string displayedSession="",message="";
+    public ExperimentDataManagementUI(ExperimentLogger log,ExperimentParticipantRegistry roles,Transform parent,TMP_FontAsset japanese,Transform detailParent=null)
     {
         logger=log;registry=roles;font=japanese;
-        panel=Rect("ExperimentDataManagement",parent,new Vector2(890,-68),new Vector2(950,990));
-        var bg=panel.gameObject.AddComponent<RoundedPanelGraphic>();bg.color=new Color(.035f,.055f,.085f,.98f);
-        Text("Header",panel,new Vector2(20,-12),new Vector2(910,40),"実験情報・参加者ID（実験者専用）",26);
-        Button("Test",new Vector2(20,-62),new Vector2(270,44),"Test：動作確認",()=>Edit(p=>p.experimentType="Test"));
-        Button("Pilot",new Vector2(310,-62),new Vector2(290,44),"Pilot：予備実験",()=>SelectType("Pilot"));
-        Button("Main",new Vector2(620,-62),new Vector2(300,44),"Main：本実験",()=>SelectType("Main"));
-        pair=Input("Pair",new Vector2(20,-122),"ペアID（例：001）",p=>p.pairId);
-        p1=Input("Participant1",new Vector2(20,-178),"参加者1 ID（例：P001）",p=>p.participant1Id);
-        p2=Input("Participant2",new Vector2(480,-178),"参加者2 ID（例：P002）",p=>p.participant2Id);
-        for(int i=1;i<=4;i++){string group="G"+i;Button(group,new Vector2(20+(i-1)*225,-240),new Vector2(210,42),group,()=>Edit(p=>p.allocationGroup=group));}
-        Button("Order1",new Vector2(20,-292),new Vector2(285,42),"試行順序：1回目",()=>Edit(p=>p.trialOrder=1));
-        Button("Order2",new Vector2(325,-292),new Vector2(285,42),"試行順序：2回目",()=>Edit(p=>p.trialOrder=2));
-        notes=Input("Notes",new Vector2(20,-348),"備考（1000文字以内・氏名は入力しない）",p=>p.notes,900);
-        summary=Text("AppliedAndDraft",panel,new Vector2(20,-408),new Vector2(910,120),"",19);
-        Text("BindingHelp",panel,new Vector2(20,-535),new Vector2(910,82),"適用済みIDと端末の対応確認（再接続時も確認）\n対象者だけを接続・切断して一覧の変化を確認し、本人に確認して登録します。接続順では割り当てません。",18);
-        verification=InputRaw("Verification",new Vector2(20,-622),"確認方法（例：P001だけ接続し本人に確認）",900);
-        Button("Choose1",new Vector2(20,-680),new Vector2(460,42),"参加者1の端末を選ぶ",()=>client1=Next(client1));
-        Button("Bind1",new Vector2(500,-680),new Vector2(420,42),"参加者1の対応を確認・登録",()=>Bind(1,client1));
-        Button("Choose2",new Vector2(20,-730),new Vector2(460,42),"参加者2の端末を選ぶ",()=>client2=Next(client2));
-        Button("Bind2",new Vector2(500,-730),new Vector2(420,42),"参加者2の対応を確認・登録",()=>Bind(2,client2));
-        connections=Text("Connections",panel,new Vector2(20,-780),new Vector2(910,60),"",18);
-        Button("SecondDraft",new Vector2(20,-848),new Vector2(445,44),"同じペアの2回目を次回設定へ",()=>message=logger.Data.PrepareSecondDraft()?"2回目の次回設定を用意しました。新規準備は手動で行ってください":"保存済みの1回目が必要です");
-        Button("RebuildIndex",new Vector2(485,-848),new Vector2(435,44),"セッション一覧を再構築",()=>message=logger.RebuildIndex()?"セッション一覧を再構築しました":"再構築できません。メタデータと保存先を確認してください");
-        error=Text("MetadataStatus",panel,new Vector2(20,-910),new Vector2(910,70),"",20);
-        panel.gameObject.SetActive(false);
+        panel=Rect("ExperimentDataManagement",parent,new Vector2(24,-454),new Vector2(1712,470));
+        advanced=detailParent??panel;
+        pair=Input("Pair",panel,new Vector2(0,-38),"ペアID",440,p=>p.pairId,(p,v)=>p.pairId=v);
+        p1=Input("Participant1",panel,new Vector2(464,-38),"参加者1",440,p=>p.participant1Id,(p,v)=>p.participant1Id=v);
+        p2=Input("Participant2",panel,new Vector2(928,-38),"参加者2",440,p=>p.participant2Id,(p,v)=>p.participant2Id=v);
+        summary=Text("AllocationHelp",panel,Vector2.zero,new Vector2(1690,32),"",22);
+        string[] labels={"G1　通常 A → 提案 B","G2　提案 A → 通常 B","G3　通常 B → 提案 A","G4　提案 B → 通常 A"};
+        for(int i=0;i<4;i++){string g="G"+(i+1);groups[i]=Button("G"+(i+1),panel,new Vector2(i*420,-96),new Vector2(404,52),labels[i],()=>Edit(p=>p.allocationGroup=g));}
+        Text("BindingHelp",panel,new Vector2(0,-168),new Vector2(1690,58),"使用端末の確認（適用済みの参加者）　接続順では割り当てません。\n本人と端末を照合し、端末を選んで確認登録してください。2回目・再接続時も確認が必要です。",20);
+        connections=Text("Connections",panel,new Vector2(0,-232),new Vector2(1690,36),"",21);
+        device1=Dropdown("Device1",panel,new Vector2(0,-276),new Vector2(470,48),new[]{"端末を選択"});
+        secondRow=Rect("SecondBinding",panel,new Vector2(870,-276),new Vector2(820,48)).gameObject;
+        device2=Dropdown("Device2",secondRow.transform,Vector2.zero,new Vector2(470,48),new[]{"端末を選択"});
+        bind1=Button("Bind1",panel,new Vector2(490,-276),new Vector2(330,48),"参加者1を確認・登録",()=>Bind(1));
+        bind2=Button("Bind2",secondRow.transform,new Vector2(490,0),new Vector2(330,48),"参加者2を確認・登録",()=>Bind(2));
+        method=Dropdown("VerificationMethod",panel,new Vector2(0,-340),new Vector2(820,48),new[]{"本人に端末を提示してもらい確認","対象者だけ接続・切断して本人に確認","その他（詳細設定に確認方法を入力）"});
+        error=Text("MetadataStatus",panel,new Vector2(0,-404),new Vector2(1690,64),"",20);
+        // Manual override/retry tools stay with technical details, not the main flow.
+        manualPair=Input("ManualPair",advanced,new Vector2(24,-430),"ペアID",440,p=>p.pairId,(p,v)=>p.pairId=v);
+        manual1=Input("ManualParticipant1",advanced,new Vector2(488,-430),"参加者1",440,p=>p.participant1Id,(p,v)=>p.participant1Id=v);
+        manual2=Input("ManualParticipant2",advanced,new Vector2(952,-430),"参加者2",440,p=>p.participant2Id,(p,v)=>p.participant2Id=v);
+        for(int i=0;i<4;i++){string g="G"+(i+1);Button("Manual"+g,advanced,new Vector2(24+i*420,-490),new Vector2(404,48),labels[i],()=>Edit(p=>p.allocationGroup=g));}
+        notes=Input("Notes",advanced,new Vector2(24,-550),"備考",1640,p=>p.notes,(p,v)=>p.notes=v);
+        verification=InputRaw("Verification",advanced,new Vector2(24,-610),"その他の確認方法",1640,200);
+        Button("Order1",advanced,new Vector2(24,-670),new Vector2(300,48),"手動：1回目を再試行",()=>Retry(1));
+        Button("Order2",advanced,new Vector2(340,-670),new Vector2(300,48),"手動：2回目を再試行",()=>Retry(2));
+        Button("RestoreApplied",advanced,new Vector2(656,-670),new Vector2(440,48),"現在のペア設定を次回へ戻す",()=>{var m=logger.Data.Applied;if(m!=null)Edit(p=>Copy(m.plan,p));});
+        Text("ManualHelp",advanced,new Vector2(24,-730),new Vector2(1640,60),"ID・割り当ては次回設定だけを変更します。再試行も確認ダイアログを経て別Session IDに保存します。\n備考に氏名を入力しないでください。アンケート終了は実験者が確認してください。",20);
     }
+    static void Copy(ExperimentDataPlan from,ExperimentDataPlan to)
+    {to.experimentType=from.experimentType;to.pairId=from.pairId;to.participant1Id=from.participant1Id;to.participant2Id=from.participant2Id;to.allocationGroup=from.allocationGroup;to.trialOrder=from.trialOrder;to.notes=from.notes;}
+    void Retry(int order){var m=logger.Data.Applied;if(m==null)return;Edit(p=>{Copy(m.plan,p);p.trialOrder=order;});}
+    void Edit(Action<ExperimentDataPlan> action){var d=logger.Data.Draft;action(d);message=logger.Data.SetDraft(d)?"次回設定を変更しました。適用前に確認してください":"同期中は変更できません";}
     public void SetVisible(bool visible){panel.gameObject.SetActive(visible);if(visible)Refresh();}
-    void SelectType(string type)=>Edit(p=>{p.experimentType=type;if(p.allocationGroup=="")p.allocationGroup="G1";});
-    void Edit(Action<ExperimentDataPlan> action){var draft=logger.Data.Draft;action(draft);if(!logger.Data.SetDraft(draft))message="準備処理中は設定できません";}
-    int Next(int selected){var clients=registry.ParticipantClientNos.ToArray();if(clients.Length==0)return -1;int index=Array.IndexOf(clients,selected);return clients[(index+1)%clients.Length];}
-    void Bind(int slot,int client)
+    void Bind(int slot)
     {
-        var m=logger.Data.Applied;
-        if(m==null){message="先に新規セッションを準備してください";return;}
-        message=logger.Data.ConfirmBinding(slot==1?m.plan.participant1Id:m.plan.participant2Id,client,verification.text)?"対応を記録しました":logger.Data.LastError;
+        var m=logger.Data.Applied;var dropdown=slot==1?device1:device2;int index=dropdown.value-1;
+        if(m==null || index<0 || index>=clients.Length){message="先にセッションを準備し、端末を選択してください";return;}
+        if(keys[index]!=logger.Data.DeviceKey(clients[index])){message="端末識別が変わりました。再選択して確認してください";return;}
+        string proof=method.value==2?verification.text:method.options[method.value].text;
+        message=logger.Data.ConfirmBinding(slot==1?m.plan.participant1Id:m.plan.participant2Id,clients[index],proof)?"本人・端末の対応を記録しました":logger.Data.LastError;
     }
     public void Refresh()
     {
-        if(!panel.gameObject.activeSelf)return;
         var d=logger.Data.Draft;var m=logger.Data.Applied;
-        Sync(pair,d.pairId);Sync(p1,d.participant1Id);Sync(p2,d.participant2Id);Sync(notes,d.notes);
-        summary.text="次回："+d.experimentType+" ／ ペア "+d.pairId+" ／ "+d.allocationGroup+" ／ "+d.trialOrder+"回目\n適用済み："+(m==null?"未準備":m.plan.experimentType+" ／ ペア "+m.plan.pairId+" ／ "+m.plan.allocationGroup+" ／ "+m.plan.trialOrder+"回目 ／ "+m.condition+" "+m.cardSetId)+"\n適用済みID："+(m==null?"未準備":m.plan.participant1Id+" ／ "+m.plan.participant2Id)+"\n保存先："+(m==null?"未決定":m.relativePath.Replace(m.sessionId,m.sessionId.Substring(0,Math.Min(12,m.sessionId.Length))+"…"));
-        connections.text="登録："+logger.Data.BindingSummary+"\n選択：参加者1 → "+(client1<0?"未選択":client1.ToString())+" ／ 参加者2 → "+(client2<0?"未選択":client2.ToString())+"　接続端末："+string.Join("　",registry.ParticipantClientNos.Select(c=>c+"（端末 "+Short(logger.Data.DeviceKey(c))+"）"));
-        error.text=message!=""?message:logger.Data.StartBlockReason!=""?logger.Data.StartBlockReason:logger.IndexWarning!=""?"一覧CSVの更新に失敗しています。再構築してください":"実験情報を確認できました";
+        bool settingsEnabled=!logger.GetComponent<ExperimentSessionManager>().IsResettingSession;
+        foreach(var field in new[]{pair,p1,p2,manualPair,manual1,manual2,notes})field.interactable=settingsEnabled;
+        foreach(var button in groups)button.interactable=settingsEnabled;
+        Sync(pair,d.pairId);Sync(p1,d.participant1Id);Sync(p2,d.participant2Id);Sync(notes,d.notes);Sync(manualPair,d.pairId);Sync(manual1,d.participant1Id);Sync(manual2,d.participant2Id);
+        p2.gameObject.SetActive(logger.GetComponent<ExperimentSessionManager>().DraftExpectedParticipants==2);
+        summary.text="次回候補："+d.trialOrder+"回目 ／ "+d.allocationGroup+"　割り当て一覧：1回目 → 2回目（研究計画と照合して確認）";
+        for(int i=0;i<4;i++)groups[i].GetComponent<RoundedPanelGraphic>().color=d.allocationGroup=="G"+(i+1)?ExperimenterUIColors.Accent:ExperimenterUIColors.Control;
+        var next=registry.ParticipantClientNos.ToArray();var nextKeys=next.Select(logger.Data.DeviceKey).ToArray();
+        if(!clients.SequenceEqual(next) || !keys.SequenceEqual(nextKeys) || displayedSession!=m?.sessionId)
+        {
+            clients=next;keys=nextKeys;displayedSession=m?.sessionId;message="";
+            foreach(var dropdown in new[]{device1,device2}){dropdown.Hide();dropdown.ClearOptions();dropdown.AddOptions(new[]{"端末を選択（本人確認後）"}.Concat(clients.Select((c,i)=>"接続端末 "+(char)('A'+i))).ToList());dropdown.SetValueWithoutNotify(0);dropdown.RefreshShownValue();}
+        }
+        string Status(string id)
+        {return id+"："+(clients.Any(c=>logger.Data.TryResolveParticipant(c,out string pid)&&pid==id)?"確認済み":"未確認");}
+        bool controlled=m!=null && m.plan.experimentType!="Test";
+        connections.text=controlled?Status(m.plan.participant1Id)+(m.expectedParticipantCount==2?"　／　"+Status(m.plan.participant2Id):"")+"　接続端末："+clients.Length+"台":"セッション準備後に参加者の端末を確認します";
+        secondRow.SetActive(controlled && m.expectedParticipantCount==2);
+        bind1.GetComponentInChildren<TMP_Text>().text=(controlled?m.plan.participant1Id:"参加者1")+"を確認・登録";
+        bind2.GetComponentInChildren<TMP_Text>().text=(controlled?m.plan.participant2Id:"参加者2")+"を確認・登録";
+        bool editable=controlled && !logger.GetComponent<ExperimentSessionManager>().IsResettingSession && !logger.GetComponent<ExperimentSessionManager>().Lobby.HasStartRequestedOrStarted;
+        bind1.interactable=editable&&device1.value>0;bind2.interactable=editable&&device2.value>0;
+        error.text=message;
     }
-    static string Short(string value)=>value.Length>8?value.Substring(0,8):"未確認";
     static void Sync(TMP_InputField field,string value){if(!field.isFocused && field.text!=value)field.SetTextWithoutNotify(value);}
-    TMP_InputField Input(string name,Vector2 pos,string hint,Func<ExperimentDataPlan,string> getter,float width=440)
+    TMP_InputField Input(string name,Transform parent,Vector2 pos,string title,float width,Func<ExperimentDataPlan,string> getter,Action<ExperimentDataPlan,string> setter)
+    {var field=InputRaw(name,parent,pos,title,width,name=="Notes"?1000:40);field.onEndEdit.AddListener(v=>Edit(p=>setter(p,v)));return field;}
+    TMP_InputField InputRaw(string name,Transform parent,Vector2 pos,string title,float width,int limit)
     {
-        var input=InputRaw(name,pos,hint,width);
-        input.onEndEdit.AddListener(value=>Edit(p=>{if(name=="Pair")p.pairId=value;else if(name=="Participant1")p.participant1Id=value;else if(name=="Participant2")p.participant2Id=value;else p.notes=value;}));return input;
-    }
-    TMP_InputField InputRaw(string name,Vector2 pos,string hint,float width)
-    {
-        var rect=Rect(name,panel,pos,new Vector2(width,48));var bg=rect.gameObject.AddComponent<UnityEngine.UI.Image>();bg.color=new Color(.10f,.16f,.21f);
-        string caption=name=="Pair"?"ペアID":name=="Participant1"?"参加者1 ID":name=="Participant2"?"参加者2 ID":name=="Notes"?"備考":"確認方法";
-        string example=name=="Pair"?"例：001":name=="Participant1"?"例：P001":name=="Participant2"?"例：P002":name=="Notes"?"1000文字以内・氏名は入力しない":"対象者だけ接続し本人に確認";
-        Text("Caption",rect,new Vector2(8,-4),new Vector2(125,40),caption,19);
-        var viewport=Rect("Viewport",rect,new Vector2(140,-4),new Vector2(width-150,40));viewport.gameObject.AddComponent<UnityEngine.UI.RectMask2D>();
+        var rect=Rect(name,parent,pos,new Vector2(width,48));var bg=rect.gameObject.AddComponent<UnityEngine.UI.Image>();bg.color=ExperimenterUIColors.Field;
+        float caption=title.Length>6?260:140;Text("Caption",rect,new Vector2(12,-8),new Vector2(caption-20,32),title,20);
+        var viewport=Rect("Viewport",rect,new Vector2(caption,-4),new Vector2(width-caption-12,40));viewport.gameObject.AddComponent<UnityEngine.UI.RectMask2D>();
         var field=rect.gameObject.AddComponent<TMP_InputField>();var text=Text("Text",viewport,Vector2.zero,viewport.sizeDelta,"",21);text.richText=false;
-        var placeholder=Text("Placeholder",viewport,Vector2.zero,viewport.sizeDelta,example,20);placeholder.color=new Color(.65f,.73f,.78f);
-        field.textViewport=viewport;field.textComponent=text;field.placeholder=placeholder;field.targetGraphic=bg;field.characterLimit=name=="Notes"?1000:name=="Verification"?200:40;
-        return field;
+        field.textViewport=viewport;field.textComponent=text;field.targetGraphic=bg;field.characterLimit=limit;return field;
     }
-    void Button(string name,Vector2 pos,Vector2 size,string title,UnityEngine.Events.UnityAction action)
-    {var rect=Rect(name,panel,pos,size);var bg=rect.gameObject.AddComponent<RoundedPanelGraphic>();bg.color=new Color(.12f,.24f,.29f);var b=rect.gameObject.AddComponent<UnityEngine.UI.Button>();b.targetGraphic=bg;b.onClick.AddListener(action);var t=Text("Label",rect,new Vector2(6,-3),size-new Vector2(12,6),title,20);t.alignment=TextAlignmentOptions.Center;}
+    TMP_Dropdown Dropdown(string name,Transform parent,Vector2 pos,Vector2 size,string[] options)
+    {
+        var root=Rect(name,parent,pos,size);var bg=root.gameObject.AddComponent<UnityEngine.UI.Image>();bg.color=ExperimenterUIColors.Field;
+        var drop=root.gameObject.AddComponent<TMP_Dropdown>();drop.targetGraphic=bg;
+        drop.captionText=Text("Selected",root,new Vector2(12,-6),size-new Vector2(50,12),"",20);
+        Text("Arrow",root,new Vector2(size.x-34,-6),new Vector2(26,36),"▼",20);
+        var template=Rect("Template",root,new Vector2(0,-size.y),new Vector2(size.x,192));var surface=template.gameObject.AddComponent<UnityEngine.UI.Image>();surface.color=new Color(.08f,.13f,.18f);
+        var scroll=template.gameObject.AddComponent<UnityEngine.UI.ScrollRect>();scroll.horizontal=false;scroll.movementType=UnityEngine.UI.ScrollRect.MovementType.Clamped;scroll.scrollSensitivity=30;
+        var viewport=Rect("Viewport",template,Vector2.zero,template.sizeDelta);viewport.gameObject.AddComponent<UnityEngine.UI.RectMask2D>();var hit=viewport.gameObject.AddComponent<UnityEngine.UI.Image>();hit.color=Color.clear;
+        var content=Rect("Content",viewport,Vector2.zero,new Vector2(size.x,48));scroll.viewport=viewport;scroll.content=content;
+        var item=Rect("Item",content,Vector2.zero,new Vector2(size.x,48));var itemBg=item.gameObject.AddComponent<UnityEngine.UI.Image>();itemBg.color=ExperimenterUIColors.Control;
+        var toggle=item.gameObject.AddComponent<UnityEngine.UI.Toggle>();toggle.targetGraphic=itemBg;
+        var check=Rect("Check",item,new Vector2(4,-14),new Vector2(12,20)).gameObject.AddComponent<UnityEngine.UI.Image>();check.color=new Color(.35f,.86f,.79f);toggle.graphic=check;
+        drop.itemText=Text("ItemLabel",item,new Vector2(24,-6),new Vector2(size.x-36,36),"",20);
+        drop.template=template;drop.AddOptions(options.ToList());template.gameObject.SetActive(false);return drop;
+    }
+    UnityEngine.UI.Button Button(string name,Transform parent,Vector2 pos,Vector2 size,string title,UnityEngine.Events.UnityAction action)
+    {var rect=Rect(name,parent,pos,size);var bg=rect.gameObject.AddComponent<RoundedPanelGraphic>();bg.color=ExperimenterUIColors.Control;var b=rect.gameObject.AddComponent<UnityEngine.UI.Button>();b.targetGraphic=bg;b.onClick.AddListener(action);var t=Text("Label",rect,new Vector2(8,-4),size-new Vector2(16,8),title,20);t.alignment=TextAlignmentOptions.Center;return b;}
     TMP_Text Text(string name,Transform parent,Vector2 pos,Vector2 size,string value,float fontSize)
-    {var rect=Rect(name,parent,pos,size);var t=rect.gameObject.AddComponent<TextMeshProUGUI>();t.font=font;t.richText=false;t.text=value;t.fontSize=fontSize;t.enableAutoSizing=false;t.color=Color.white;t.raycastTarget=false;t.alignment=TextAlignmentOptions.TopLeft;t.textWrappingMode=TextWrappingModes.Normal;return t;}
+    {var rect=Rect(name,parent,pos,size);var t=rect.gameObject.AddComponent<TextMeshProUGUI>();t.font=font;t.richText=false;t.text=value;t.fontSize=fontSize;t.color=Color.white;t.raycastTarget=false;t.alignment=TextAlignmentOptions.TopLeft;t.textWrappingMode=TextWrappingModes.Normal;return t;}
     static RectTransform Rect(string name,Transform parent,Vector2 pos,Vector2 size)
     {var rect=(RectTransform)new GameObject(name,typeof(RectTransform)).transform;rect.SetParent(parent,false);rect.anchorMin=rect.anchorMax=rect.pivot=new Vector2(0,1);rect.anchoredPosition=pos;rect.sizeDelta=size;return rect;}
 }

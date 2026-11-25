@@ -73,13 +73,16 @@ public sealed class ExperimentLogger : MonoBehaviour
         network = participantRegistry.Network;
         if (network == null) return;
         network.OnReady.AddListener(OnNetworkReady);
+        network.OnAvatarDisconnected.AddListener(OnDeviceDisconnected);
         network.OnClientVariableChanged.AddListener(OnClientChanged);
         if (network.IsReady) OnNetworkReady();
     }
-    private void OnNetworkReady() { liveSession = null; baselineNeeded = true; }
+    private void OnDeviceDisconnected(int client)=>dataManagement?.InvalidateBinding(client);
+    private void OnNetworkReady() { dataManagement?.InvalidateBindings(); liveSession = null; baselineNeeded = true; }
     private void Start() { wasWriter = CanWrite; SubscribeNetwork(); CaptureSnapshot(); }
     private void Update()
     {
+        dataManagement?.ObserveConnections();
         SubscribeNetwork();
         if (network == null || !network.IsReady) { liveSession = null; baselineNeeded = true; }
         if (CanWrite && !wasWriter) { liveSession = null; baselineNeeded = true; }
@@ -96,6 +99,7 @@ public sealed class ExperimentLogger : MonoBehaviour
     }
     private void OnDisable()
     {
+        dataManagement?.InvalidateBindings();
         if (subscribed)
         {
             sessionManager.OnSessionResetStarted -= OnResetStarted; sessionManager.OnSessionStarted -= OnResetCompleted;
@@ -103,7 +107,8 @@ public sealed class ExperimentLogger : MonoBehaviour
             if (reveal != null) reveal.OnRevealChanged -= OnRevealed;
             if (shared != null) shared.OnSharedClassificationStarted -= OnSharedStarted;
         }
-        if (network != null) { network.OnReady.RemoveListener(OnNetworkReady); network.OnClientVariableChanged.RemoveListener(OnClientChanged); }
+        if (network != null) { network.OnReady.RemoveListener(OnNetworkReady);
+            network.OnAvatarDisconnected.RemoveListener(OnDeviceDisconnected); network.OnClientVariableChanged.RemoveListener(OnClientChanged); }
         preparedSession = null;
         subscribed = false; network = null; liveSession = null; Drain();
     }

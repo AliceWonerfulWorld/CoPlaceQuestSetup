@@ -95,6 +95,7 @@ public static class ExperimentDataManagementVerification
             Check(service.ConfirmBinding("P010",1,"Only connected headset; operator checked participant"),"explicit valid participant-device confirmation accepted");
             Check(service.StartBlockReason=="" && host.lobby.CanStart,"confirmed mapping permits normal Start guard");
             deviceMap[1]="different-device";Check(service.StartBlockReason!="","device replacement invalidates prior confirmation");deviceMap[1]="verification-headset-one";
+            Check(service.StartBlockReason!="" && service.ConfirmBinding("P010",1,"Operator rechecked original headset"),"returning device still requires explicit confirmation");
             string firstSession=host.session.CurrentSessionId;
             Check(host.lobby.StartExperiment(),"Main trial starts only after manual binding");foreach(var peer in people)ProposedRevealVerification.Deliver(host,peer);ParticipantVerificationSession.Tick(people.Concat(new[]{host}).ToArray(),4);
             foreach(string id in people[0].placements.CardIds)Check(people[0].placements.SendPlacement(id,"C"),"Main Normal placement "+id);
@@ -113,7 +114,7 @@ public static class ExperimentDataManagementVerification
             var phase=ExperimentCsvLogStore.ReadCsv(Path.Combine(logger.SessionDirectory(host.session.CurrentSessionId),"phase_events.csv"));
             var bindingRows=ExperimentCsvLogStore.ReadCsv(Path.Combine(logger.SessionDirectory(host.session.CurrentSessionId),"participant_bindings.csv"));
             Check(bindingRows.Skip(1).All(row=>row[7]==phase[1][10] && row[9]=="Participant"),"mapping and phase logs share observer run and verified Role");
-            var ui=host.session.EnsureResetUI();ui.Refresh();ParticipantVerificationSession.Set(ui,"showDataManagement",true);ui.Refresh();ExperimenterControlPanelVerification.Capture(host,"data-management");
+            var ui=host.session.EnsureResetUI();ui.Refresh();ui.Refresh();ExperimenterControlPanelVerification.Capture(host,"data-management");
             ui.RequestConfirmation();var input=host.scene.GetRootGameObjects().Single(o=>o.name=="ExperimenterControlPanel").GetComponentsInChildren<TMP_InputField>(true).Single(f=>f.name=="Notes");input.onEndEdit.Invoke("next trial notes changed");ui.Refresh();
             Check(!ui.IsConfirmationOpen && service.Applied.plan.notes=="" && service.HasDraftChanges,"metadata input updates Draft only and cancels stale confirmation");
             r.passed=true;

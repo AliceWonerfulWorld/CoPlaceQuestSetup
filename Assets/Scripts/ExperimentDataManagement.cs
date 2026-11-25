@@ -15,7 +15,8 @@ public sealed class ExperimentDataManagement
     ExperimentDataPlan draft=new ExperimentDataPlan();
     readonly Dictionary<string,ExperimentDataStore.Metadata> metadata=new Dictionary<string,ExperimentDataStore.Metadata>();
     readonly Dictionary<int,ExperimentDataStore.Binding> bindings=new Dictionary<int,ExperimentDataStore.Binding>();
-    string bindingSession;
+    string bindingSession, checkedSecondSession;
+    bool savedFirstTrial;
     public ExperimentDataManagement(ExperimentSessionManager s,ExperimentParticipantRegistry r,Func<string> path,string observerRunId=null){session=s;registry=r;root=path;run=observerRunId??Guid.NewGuid().ToString("N");}
     bool IsAdmin=>registry!=null && registry.IsLocalExperimenter && !Application.isMobilePlatform;
     public ExperimentDataPlan Draft=>draft.Copy();
@@ -85,7 +86,27 @@ public sealed class ExperimentDataManagement
     public static string HashDevice(string value)
     {if(string.IsNullOrEmpty(value))return "";using(var hash=SHA256.Create())return string.Concat(hash.ComputeHash(Encoding.UTF8.GetBytes(value)).Select(b=>b.ToString("x2")));}
     public string DeviceKey(int client)=>HashDevice(registry.Network?.GetDeviceIdByClientNo(client));
-    void EnsureBindingSession(){if(bindingSession!=session.CurrentSessionId){bindings.Clear();bindingSession=session.CurrentSessionId;}}
+    public void InvalidateBindings()=>bindings.Clear();
+    public void InvalidateBinding(int client)=>bindings.Remove(client);
+    public void ObserveConnections()=>EnsureBindingSession();
+    void EnsureBindingSession()
+    {
+        if(bindingSession!=session.CurrentSessionId){bindings.Clear();bindingSession=session.CurrentSessionId;}
+        if(registry.Network==null || !registry.Network.IsReady){bindings.Clear();return;}
+        var alive=registry.Network.GetAliveClients(includeStealthClients:true);
+        foreach(int client in bindings.Keys.ToArray())
+            if(!alive.Contains(client) || !registry.IsRegisteredParticipant(client) || registry.Network.GetClientVariable(ExperimentParticipantRegistry.RoleVariable,client)!="Participant" || bindings[client].deviceKey!=DeviceKey(client))bindings.Remove(client);
+    }
+    public bool SuggestNewPair(string type)
+    {
+        LastError="";
+        try
+        {
+            if(!IsAdmin || session.IsResettingSession)return false;
+            return SetDraft(new ExperimentDataStore(root()).SuggestNewPair(type,session.DraftExpectedParticipants,metadata.Values));
+        }
+        catch(Exception e){LastError="ID候補を作成できません。メタデータを確認してください："+e.Message;return false;}
+    }
     public bool ConfirmBinding(string participantId,int client,string confirmationReason)
     {
         LastError="";
@@ -113,6 +134,16 @@ public sealed class ExperimentDataManagement
             if(TryResolveParticipant(client,out _))continue;
             store.AppendBinding(m,new ExperimentDataStore.Binding{sessionId=m.sessionId,epoch=m.epoch,participantId="",clientNo=client,deviceKey=DeviceKey(client),confirmedAtUtc=DateTime.UtcNow.ToString("o"),observerRunId=run,role=registry.Network?.GetClientVariable(ExperimentParticipantRegistry.RoleVariable,client)??"unknown",reason="unassigned_at_start; do not infer participant identity"});
         }
+    }
+    public bool HasSavedFirstTrial()
+    {
+        var m=Applied;if(m==null)return false;
+        if(checkedSecondSession!=m.sessionId)
+        {
+            savedFirstTrial=new ExperimentDataStore(root()).ReadAll().Any(x=>x.plan.experimentType==m.plan.experimentType && x.plan.pairId==m.plan.pairId && x.plan.participant1Id==m.plan.participant1Id && x.plan.participant2Id==m.plan.participant2Id && x.plan.allocationGroup==m.plan.allocationGroup && x.plan.trialOrder==1 && x.status=="completed" && x.saveStatus=="complete");
+            checkedSecondSession=m.sessionId;
+        }
+        return savedFirstTrial;
     }
     public bool PrepareSecondDraft()
     {

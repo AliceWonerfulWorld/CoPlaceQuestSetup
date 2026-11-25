@@ -1,0 +1,14 @@
+{
+  "before_files": 103,
+  "after_files": 103,
+  "primary_files": 99,
+  "primary_files_unchanged": true,
+  "csv_files": 94,
+  "all_csv_files_unchanged": true,
+  "changed_backups": [
+    "session_index.csv.bak",
+    "Pilot/Pair_TEST001/01_Normal_A_ebc7d279551f486ab5a31aa2427d769e/session_metadata.json.bak"
+  ],
+  "added_files": 0,
+  "explanation": "Initial Play isolation did not carry over; retained observations in existing logger refreshed two .bak files. Primary metadata and every CSV remained byte-identical. No backup restoration or research-data deletion performed."
+}

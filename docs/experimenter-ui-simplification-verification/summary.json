@@ -1,0 +1,72 @@
+{
+  "simplification": {
+    "passed": true,
+    "checks": 215,
+    "source": "Library/ExperimenterUISimplificationVerification/dc927280d02d43c79810098b18e55b91/result.json"
+  },
+  "data-management": {
+    "passed": true,
+    "checks": 140,
+    "source": "Library/ExperimentDataManagementVerification/d5cea37d02c244d981bdfa62c5b831c7/result.json"
+  },
+  "management": {
+    "passed": true,
+    "checks": 209,
+    "source": "Documentation/ExperimenterControlPanelVerification.json"
+  },
+  "answer-logging": {
+    "passed": true,
+    "checks": 378,
+    "source": "Library/AnswerLoggingVerification/58d04ba1881c49aa904271ecb2cd0853/result.json"
+  },
+  "answer-store": {
+    "passed": true,
+    "checks": 18,
+    "source": "Library/AnswerSnapshotStoreVerification/4d07c5bba6f346f2974a6181e49d9579/result.json"
+  },
+  "logger": {
+    "passed": true,
+    "checks": 29,
+    "source": "Library/ExperimentLoggerVerification/result.json"
+  },
+  "result": {
+    "passed": true,
+    "checks": 78,
+    "source": "Library/ExperimentResultVerification/result.json"
+  },
+  "participant-ui": {
+    "passed": true,
+    "checks": 2659,
+    "source": "Documentation/ParticipantUIVerification.json"
+  },
+  "pilot": {
+    "passed": true,
+    "checks": 433,
+    "source": "Documentation/PilotCardSetVerification.json"
+  },
+  "lobby": {
+    "passed": true,
+    "checks": 39,
+    "source": "Library/ExperimentLobbyVerification/result.json"
+  },
+  "submission": {
+    "passed": true,
+    "checks": 14,
+    "source": "Library/IndependentAnswerSubmissionVerification/result.json"
+  },
+  "reveal": {
+    "passed": true,
+    "checks": 74,
+    "source": "Library/ProposedRevealVerification/result.json"
+  },
+  "shared": {
+    "passed": true,
+    "checks": 44,
+    "source": "Library/ProposedSharedPlacementVerification/result.json"
+  },
+  "runtime": {
+    "passed": true,
+    "checks": 112,
+    "source": "AgentScripts/verify_experimenter_ui_runtime.cs"
+  }
+}

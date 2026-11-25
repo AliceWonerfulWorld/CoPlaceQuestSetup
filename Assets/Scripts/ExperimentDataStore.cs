@@ -107,6 +107,22 @@ public sealed class ExperimentDataStore
         }
         return "";
     }
+    // Read the authoritative sidecars, never the disposable index. A suggestion
+    // is only a Draft candidate; it does not reserve or persist an identity.
+    public ExperimentDataPlan SuggestNewPair(string type,int count,IEnumerable<Metadata> pending=null)
+    {
+        if((type!="Pilot" && type!="Main") || (count!=1 && count!=2))throw new ArgumentException("予備実験／本実験と参加人数を確認してください");
+        var plans=ReadAll().Concat(pending??Enumerable.Empty<Metadata>()).Where(m=>m.plan.experimentType==type).Select(m=>m.plan).ToArray();
+        string Canonical(string id)=>long.TryParse(id,System.Globalization.NumberStyles.None,CultureInfo.InvariantCulture,out var n)?n.ToString(CultureInfo.InvariantCulture):id;
+        var pairs=new HashSet<string>(plans.Select(p=>Canonical(p.pairId)),StringComparer.OrdinalIgnoreCase);
+        var people=new HashSet<string>(plans.SelectMany(p=>new[]{p.participant1Id,p.participant2Id}).Where(p=>!string.IsNullOrEmpty(p)).Select(p=>Canonical(p.Substring(1))));
+        long Next(HashSet<string> used)
+        {
+            for(long n=1;n<=999999999999;n++)if(used.Add(n.ToString(CultureInfo.InvariantCulture)))return n;
+            throw new InvalidOperationException("未使用IDが見つかりません。詳細設定を確認してください");
+        }
+        return new ExperimentDataPlan{experimentType=type,pairId=Next(pairs).ToString("D3",CultureInfo.InvariantCulture),participant1Id="P"+Next(people).ToString("D3",CultureInfo.InvariantCulture),participant2Id=count==2?"P"+Next(people).ToString("D3",CultureInfo.InvariantCulture):"",allocationGroup="G1",trialOrder=1};
+    }
     public bool RebuildIndex()
     {
         try
