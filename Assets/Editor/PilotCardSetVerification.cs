@@ -122,10 +122,10 @@ public static class PilotCardSetVerification
                 // Reconnect reads the same control, keeping set and confirmed placements.
                 Call(b.session, "OnReady"); Tick(3);
                 Check(b.agreement.IsBoardConfirmed && Sets(b).ActiveSetId == set.ToString(), label + " reconnect preserves active set and final result");
-                string setLog = Path.Combine(logRoot, exp.session.CurrentSessionId, "card_set.csv");
+                string setLog = Path.Combine(exp.components.OfType<ExperimentLogger>().Single().SessionDirectory(exp.session.CurrentSessionId), "card_set.csv");
                 Check(File.Exists(setLog) && ExperimentCsvLogStore.ReadCsv(setLog)[1][1] == set.ToString(), label + " logs immutable card set in additive sidecar");
-                Check(ExperimentCsvLogStore.ReadCsv(Path.Combine(logRoot, exp.session.CurrentSessionId, "phase_events.csv"))[0].SequenceEqual(ExperimentCsvLogStore.EventColumns), label + " existing phase CSV schema preserved");
-                foreach (string file in Directory.GetFiles(Path.Combine(logRoot, exp.session.CurrentSessionId), "*.csv")) savedCsv[file] = File.ReadAllBytes(file);
+                Check(ExperimentCsvLogStore.ReadCsv(Path.Combine(exp.components.OfType<ExperimentLogger>().Single().SessionDirectory(exp.session.CurrentSessionId), "phase_events.csv"))[0].SequenceEqual(ExperimentCsvLogStore.EventColumns), label + " existing phase CSV schema preserved");
+                foreach (string file in Directory.GetFiles(exp.components.OfType<ExperimentLogger>().Single().SessionDirectory(exp.session.CurrentSessionId), "*.csv")) savedCsv[file] = File.ReadAllBytes(file);
                 Capture(a, label.Replace('/', '-'));
             }
             report.passed = true;

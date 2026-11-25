@@ -1,0 +1,29 @@
+﻿{
+    "schemaVersion": 1,
+    "sessionId": "61d302506eb048c994101f4143e63029",
+    "condition": "Normal",
+    "cardSetId": "Development",
+    "createdAtUtc": "2026-11-24T11:25:03.4568560Z",
+    "relativePath": "Test/20261124_112503_456_Normal_Development_61d302506eb048c994101f4143e63029",
+    "appVersion": "0.1.0",
+    "epoch": 1,
+    "expectedParticipantCount": 1,
+    "actualParticipantCount": 1,
+    "plan": {
+        "experimentType": "Test",
+        "pairId": "",
+        "participant1Id": "",
+        "participant2Id": "",
+        "allocationGroup": "",
+        "notes": "",
+        "trialOrder": 1
+    },
+    "startedAtUtc": "2026-11-24T11:25:03.5419780+00:00",
+    "finishedAtUtc": "2026-11-24T11:25:03.5713880+00:00",
+    "status": "aborted",
+    "saveStatus": "complete",
+    "exclusionReason": "",
+    "participantsAtStart": [
+        1
+    ]
+}

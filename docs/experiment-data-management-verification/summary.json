@@ -1,0 +1,83 @@
+{
+  "environment": "Unity 6000.3.17f1 / isolated cloned project / offline preview scenes / GUID log roots; NOT Quest hardware",
+  "tests": {
+    "participantUI": {
+      "passed": true,
+      "checks": 2659,
+      "failure": "",
+      "observedAtUtc": "2026-11-24T11:25:13.020479+00:00"
+    },
+    "reveal": {
+      "passed": true,
+      "checks": 74,
+      "failure": "",
+      "observedAtUtc": "2026-11-24T11:25:14.372077+00:00"
+    },
+    "sharedPlacement": {
+      "passed": true,
+      "checks": 44,
+      "failure": "",
+      "observedAtUtc": "2026-11-24T11:25:15.234823+00:00"
+    },
+    "submission": {
+      "passed": true,
+      "checks": 14,
+      "failure": "",
+      "observedAtUtc": "2026-11-24T11:25:15.589473+00:00"
+    },
+    "lobby": {
+      "passed": true,
+      "checks": 39,
+      "failure": "",
+      "observedAtUtc": "2026-11-24T11:25:16.553418+00:00"
+    },
+    "result": {
+      "passed": true,
+      "checks": 78,
+      "failure": "",
+      "observedAtUtc": "2026-11-24T11:25:19.326696+00:00"
+    },
+    "logger": {
+      "passed": true,
+      "checks": 29,
+      "failure": "",
+      "observedAtUtc": "2026-11-24T11:25:19.342314+00:00"
+    },
+    "management": {
+      "passed": true,
+      "checks": 209,
+      "failure": "",
+      "observedAtUtc": "2026-11-24T11:25:26.533488+00:00"
+    },
+    "pilot": {
+      "passed": true,
+      "checks": 433,
+      "failure": "",
+      "observedAtUtc": "2026-11-24T11:25:29.530158+00:00"
+    },
+    "cardDrop": {
+      "passed": true,
+      "checks": 1163,
+      "failure": "",
+      "observedAtUtc": "2026-11-24T11:25:39.171699+00:00"
+    },
+    "dataManagement": {
+      "passed": true,
+      "checks": 139,
+      "failure": "",
+      "observedAtUtc": "2026-11-24T11:25:04.808256+00:00"
+    },
+    "answerLogging": {
+      "passed": true,
+      "checks": 378,
+      "failure": "",
+      "observedAtUtc": "2026-11-24T11:25:35.772332+00:00"
+    },
+    "answerStore": {
+      "passed": true,
+      "checks": 18,
+      "failure": "",
+      "observedAtUtc": "2026-11-24T11:25:35.790177+00:00"
+    }
+  }
+}

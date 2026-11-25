@@ -166,7 +166,7 @@ public static class ParticipantUIVerification
                     Check(resultPanel.transform.position==resultPosition,tag+" completion panel remains world anchored");eye.transform.position-=Vector3.right*.2f;
                     if(count==2 && set=="A") Capture(a,"result-"+mode,resultPanel.transform,.50f);
                     var logger=host.components.OfType<ExperimentLogger>().Single();
-                    string folder=Path.Combine(logger.OutputDirectory,host.session.CurrentSessionId);
+                    string folder=logger.SessionDirectory(host.session.CurrentSessionId);
                     Check(logger.FinalSaveStatus=="保存済み" && ExperimentCsvLogStore.ReadCsv(Path.Combine(folder,"final_placements.csv")).Count==ids.Length+1,tag+" final CSV saved");
                     if(mode==ExperimentManager.ExperimentMode.Proposed) Check(logger.IndependentSaveStatus=="保存済み" && ExperimentCsvLogStore.ReadCsv(Path.Combine(folder,"independent_answers.csv")).Count==ids.Length*count+1,tag+" independent CSV matrix saved");
                     management.Refresh();Check(management.CanReset && management.PreparationActionLabel=="次のセッションを準備する",tag+" normal completion offers next session");

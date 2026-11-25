@@ -42,6 +42,8 @@ public class ExperimentSessionManager : MonoBehaviour
         if (participantRegistry == null || !participantRegistry.IsLocalExperimenter || IsResettingSession ||
             !Enum.IsDefined(typeof(ExperimentManager.ExperimentMode), mode) || count < 1 ||
             (set != "A" && set != "B" && set != "Development")) return false;
+        var logger=experimentManager!=null?experimentManager.GetComponent<ExperimentLogger>():null;
+        if(logger!=null && !logger.Data.CanSelect(mode,set))return false;
         DraftMode = mode; DraftCardSetId = set; DraftExpectedParticipants = count; return true;
     }
     public string SettingsSignature => HasAppliedSettings ? CurrentSessionId + ":" + SessionEpoch + ":" + control.mode + ":" + CurrentCardSetId + ":" + AppliedExpectedParticipants : "";
@@ -364,14 +366,17 @@ public class ExperimentSessionManager : MonoBehaviour
         if (!normalPlacementSync.HasUnclassifiedZone) { Fail("Unclassified TierZone is missing"); return false; }
         var logger = experimentManager.GetComponent<ExperimentLogger>();
         if (logger == null || !logger.TryFlushBeforeReset()) { Fail("CSV save failed; Reset blocked: " + (logger != null ? logger.LastError : "ExperimentLogger is missing")); return false; }
+        string metadataError=logger.Data.ValidatePreparation();
+        if(metadataError!=""){Fail(metadataError);return false;}
         Debug.Log($"[Session Reset Start] Previous Session: {CurrentSessionId}");
         var next = new Control { id = Guid.NewGuid().ToString("N"), startedAt = DateTime.UtcNow.ToString("o"), phase = "resetting", owner = network.ClientNo, mode = DraftMode.ToString(), cardSetId = DraftCardSetId, expectedParticipantCount = DraftExpectedParticipants, settingsVersion = 1, epoch = SessionEpoch + 1 };
+        logger.Data.Prepare(next.id,next.epoch,next.startedAt);
         // Local operations stop immediately while waiting for the Room echo.
         pendingSessionRequestId = next.id;
         resetDeadline = Time.unscaledTime + 30;
         LastFailure = "";
         IsResettingSession = true;
-        if (!network.SetGlobalVariable(ControlVariable, JsonUtility.ToJson(next))) { pendingSessionRequestId = null; IsResettingSession = control != null && control.phase == "resetting"; Fail("Reset notification send failed"); return false; }
+        if (!network.SetGlobalVariable(ControlVariable, JsonUtility.ToJson(next))) { logger.Data.CancelPreparation(next.id); pendingSessionRequestId = null; IsResettingSession = control != null && control.phase == "resetting"; Fail("Reset notification send failed"); return false; }
         logger.MarkPreparationRequested(next.id);
         logger.MarkResetAccepted();
         Debug.Log($"[New Session] Session ID: {next.id}");

@@ -58,7 +58,7 @@ public static class AnswerLoggingVerification
                         Check(saved.All(p => File.ReadAllBytes(p.Key).SequenceEqual(p.Value)), label + " prior CSV bytes unchanged");
                         if (proposed) exp.lobby.SelectProposed(); else exp.lobby.SelectNormal(); Deliver(exp); Tick(3);
                         Check(exp.lobby.StartExperiment(), label + " Start"); Deliver(exp); Tick(4);
-                        string folder = Path.Combine(root, exp.session.CurrentSessionId); var ids = people[0].placements.CardIds.OrderBy(x => x).ToArray();
+                        string folder = Log(exp).SessionDirectory(exp.session.CurrentSessionId); var ids = people[0].placements.CardIds.OrderBy(x => x).ToArray();
                         if (proposed)
                         {
                             foreach (var p in people) foreach (string id in ids) Check(p.privateBoard.TryPlaceCard(id, p.net.ClientNo == 1 ? "A" : "B"), label + " private " + p.net.ClientNo + "/" + id);
@@ -130,9 +130,9 @@ public static class AnswerLoggingVerification
                                 var restored = exp.manager.gameObject.AddComponent<ExperimentLogger>();
                                 Set(restored, "sessionManager", exp.session); Set(restored, "participantRegistry", exp.registry); Set(restored, "lobby", exp.lobby); Set(restored, "finalAgreement", exp.agreement);
                                 string restoredRoot = Path.Combine(root, "restored"); Set(restored, "outputRootOverride", restoredRoot); Call(restored, "OnEnable"); Call(restored, "Update");
-                                var replay = ExperimentCsvLogStore.ReadCsv(Path.Combine(restoredRoot, exp.session.CurrentSessionId, "phase_events.csv")).Skip(1).ToArray();
+                                var replay = ExperimentCsvLogStore.ReadCsv(Path.Combine(restored.SessionDirectory(exp.session.CurrentSessionId), "phase_events.csv")).Skip(1).ToArray();
                                 Check(replay.All(ev => ev[11] == "retained_snapshot") && replay.Count(ev => ev[3] == "BOARD_CONFIRMED") == 1, label + " cold restoration explicitly marked");
-                                Check(ExperimentCsvLogStore.ReadCsv(Path.Combine(restoredRoot, exp.session.CurrentSessionId, "independent_answers.csv")).Count == count * ids.Length + 1, label + " restored immutable answers complete");
+                                Check(ExperimentCsvLogStore.ReadCsv(Path.Combine(restored.SessionDirectory(exp.session.CurrentSessionId), "independent_answers.csv")).Count == count * ids.Length + 1, label + " restored immutable answers complete");
                                 Call(restored, "OnDisable"); UnityEngine.Object.DestroyImmediate(restored); Call(original, "OnEnable");
                             }
 
@@ -144,7 +144,7 @@ public static class AnswerLoggingVerification
                     exp.session.SetDraft(ExperimentManager.ExperimentMode.Normal, "Development", count);
                     Check(exp.session.ResetSession(), "prepare aborted trial"); Deliver(exp); Tick(14);
                     exp.lobby.SelectNormal(); Deliver(exp); Tick(3); Check(exp.lobby.StartExperiment(), "start aborted trial"); Deliver(exp); Tick(3);
-                    string aborted = Path.Combine(root, exp.session.CurrentSessionId);
+                    string aborted = Log(exp).SessionDirectory(exp.session.CurrentSessionId);
                     Check(exp.session.ResetSession(), "unconfirmed trial can Reset"); Deliver(exp); Tick(14);
                     Check(ExperimentCsvLogStore.ReadCsv(Path.Combine(aborted, "phase_events.csv")).Any(r => r.Length > 3 && r[3] == "SESSION_ABORTED") && !File.Exists(Path.Combine(aborted, "final_placements.csv")), "aborted trial explicit without invented final");
                     var logger = Log(exp); logger.enabled = false;

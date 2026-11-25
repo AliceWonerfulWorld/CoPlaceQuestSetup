@@ -1,0 +1,2 @@
+﻿"schema_version","session_id","session_epoch","participant_id","participant_client_id","device_key","confirmed_at_utc","observer_run_id","reason","role_at_confirmation"
+"1","61d302506eb048c994101f4143e63029","1","","1","","2026-11-24T11:25:03.5410180Z","56caed9a551e450d8d92f10348d68d43","unassigned_at_start; do not infer participant identity","Participant"

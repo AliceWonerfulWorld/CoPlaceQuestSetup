@@ -1,0 +1,29 @@
+﻿{
+    "schemaVersion": 1,
+    "sessionId": "3c08a8b4cb4e4c389af9176ee96f3181",
+    "condition": "Proposed",
+    "cardSetId": "B",
+    "createdAtUtc": "2026-11-24T11:25:03.8439810Z",
+    "relativePath": "Main/Pair_010/02_Proposed_B_3c08a8b4cb4e4c389af9176ee96f3181",
+    "appVersion": "0.1.0",
+    "epoch": 3,
+    "expectedParticipantCount": 1,
+    "actualParticipantCount": 1,
+    "plan": {
+        "experimentType": "Main",
+        "pairId": "010",
+        "participant1Id": "P010",
+        "participant2Id": "",
+        "allocationGroup": "G1",
+        "notes": "",
+        "trialOrder": 2
+    },
+    "startedAtUtc": "2026-11-24T11:25:04.0512040+00:00",
+    "finishedAtUtc": "2026-11-24T11:25:04.2379600+00:00",
+    "status": "completed",
+    "saveStatus": "complete",
+    "exclusionReason": "",
+    "participantsAtStart": [
+        1
+    ]
+}

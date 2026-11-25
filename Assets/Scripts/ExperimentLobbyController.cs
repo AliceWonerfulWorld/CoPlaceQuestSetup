@@ -69,6 +69,7 @@ public class ExperimentLobbyController : MonoBehaviour
             if (sessionManager.HasDraftChanges) return "次回設定が未適用です。新規セッションの準備が必要です";
             var logger = experimentManager != null ? experimentManager.GetComponent<ExperimentLogger>() : null;
             if (logger == null || !logger.IsOperational) return "Loggerが有効ではありません";
+            if (logger.Data.StartBlockReason!="")return logger.Data.StartBlockReason;
             if (logger.UnsavedCount != 0 || logger.LastError != "") return "ログの保存が完了していません。保存を再試行してください";
             if (!logger.IsPreparedInCurrentRun || !logger.HasMonotonicTiming) return "新規セッションの準備が必要です（今回の計時を確認できません）";
             if (sessionManager.AcknowledgedCount != sessionManager.SyncTargetCount) return "接続端末の現セッションACK・設定同期を待っています";

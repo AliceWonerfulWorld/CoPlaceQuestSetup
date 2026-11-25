@@ -1,0 +1,2 @@
+﻿"schema_version","session_id","session_epoch","participant_id","participant_client_id","device_key","confirmed_at_utc","observer_run_id","reason","role_at_confirmation"
+"1","3c08a8b4cb4e4c389af9176ee96f3181","3","P010","1","3d9b37273a5d69451d3e79f3abf65530773f90d241c2debef146cd46ce381766","2026-11-24T11:25:04.0387830Z","56caed9a551e450d8d92f10348d68d43","Same participant and headset checked again","Participant"

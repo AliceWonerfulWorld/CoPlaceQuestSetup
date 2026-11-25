@@ -16,6 +16,13 @@ public sealed class ExperimentLogger : MonoBehaviour
     [SerializeField] private ExperimentLobbyController lobby;
     [SerializeField] private FinalAgreementManager finalAgreement;
     private ExperimentCsvLogStore store;
+    private ExperimentDataManagement dataManagement;
+    private readonly string observationRunId=Guid.NewGuid().ToString("N");
+    public ExperimentDataManagement Data => dataManagement ?? (dataManagement=new ExperimentDataManagement(sessionManager,participantRegistry,()=>OutputDirectory,observationRunId));
+    public string SessionDirectory(string id) => (store??new ExperimentCsvLogStore(OutputDirectory)).GetSessionDirectory(id);
+    public string ObservationRunId => observationRunId;
+    public string IndexWarning => store?.IndexError ?? "";
+    public bool RebuildIndex() => IsOperational && (store!=null?store.RebuildIndex():new ExperimentDataStore(OutputDirectory).RebuildIndex());
     private readonly Queue<ExperimentCsvLogStore.Observation> pending = new Queue<ExperimentCsvLogStore.Observation>();
     private readonly Dictionary<int, string> observedSubmissions = new Dictionary<int, string>();
     private string outputRootOverride = "";
@@ -40,8 +47,8 @@ public sealed class ExperimentLogger : MonoBehaviour
     public bool AreRequiredAnswersSaved => sessionManager != null && finalAgreement != null && finalAgreement.IsBoardConfirmed &&
         savedFinal.Contains(sessionManager.CurrentSessionId) &&
         (sessionManager.CurrentMode != ExperimentManager.ExperimentMode.Proposed || savedIndependent.Contains(sessionManager.CurrentSessionId));
-    internal void MarkPreparationRequested(string id) { if (IsOperational) preparedSession = id; }
-    public bool RetrySave() { if (!IsOperational) return false; try { CaptureSnapshot(); Drain(); } catch (Exception error) { LastError = error.Message; } return pending.Count == 0 && LastError == ""; }
+    internal void MarkPreparationRequested(string id) { if (IsOperational) { preparedSession = id; try{Data.PersistPreparation(id);}catch(Exception error){LastError=error.Message;} } }
+    public bool RetrySave() { if (!IsOperational) return false; try { if(preparedSession!=null)Data.PersistPreparation(preparedSession); CaptureSnapshot(); Drain(); } catch (Exception error) { LastError = error.Message; } return pending.Count == 0 && LastError == ""; }
     public string LastError { get; private set; } = "";
     public string OutputDirectory => store != null ? store.RootDirectory :
         (string.IsNullOrEmpty(outputRootOverride) ? Path.Combine(Application.persistentDataPath, "ExperimentLogs") : outputRootOverride);
@@ -121,8 +128,12 @@ public sealed class ExperimentLogger : MonoBehaviour
         EnsureSession(id, "retained_snapshot"); RecordStart(id, startId, mode, Kind);
     }
     private void RecordStart(string id, string startId, ExperimentManager.ExperimentMode mode, string kind)
-        => RecordEvent("EXPERIMENT_STARTED", id + ":EXPERIMENT_STARTED:" + startId, condition: mode.ToString(), observationKind: kind,
+    {
+        participantRegistry.RefreshParticipants();
+        var m=Data.Get(id);if(m!=null && m.startedAtUtc=="")Data.RecordCohort(m,participantRegistry.ParticipantClientNos.ToArray());
+        RecordEvent("EXPERIMENT_STARTED", id + ":EXPERIMENT_STARTED:" + startId, condition: mode.ToString(), observationKind: kind,
             participantsAtStart: string.Join(";", participantRegistry.ParticipantClientNos.Select(n => n.ToString(CultureInfo.InvariantCulture))));
+    }
     private void OnBoardConfirmed(IReadOnlyDictionary<string, string> placements) { if (CanWrite && lobby.IsExperimentStarted) CaptureFinal(Kind); }
     private void OnRevealed() { if (CanWrite && lobby.IsExperimentStarted && reveal.HasRevealed) CaptureReveal(Kind); }
     private void OnSharedStarted(string id)
@@ -166,6 +177,7 @@ public sealed class ExperimentLogger : MonoBehaviour
         var placements = finalAgreement.GetFinalPlacements();
         if (placements.Count == 0 || !new HashSet<string>(placements.Keys).SetEquals(finalAgreement.ExpectedCardIds)) throw new InvalidDataException("Incomplete confirmed final snapshot");
         var entry = CreateObservation("BOARD_CONFIRMED", sessionManager.CurrentSessionId + ":BOARD_CONFIRMED", "", kind);
+        if(entry.Metadata!=null){entry.Metadata.status="completed";if(entry.Metadata.finishedAtUtc=="")entry.Metadata.finishedAtUtc=entry.ObservedAtUtc.ToUniversalTime().ToString("o");entry.Metadata.saveStatus="pending";}
         entry.Condition = lobby.StartedMode.Value.ToString();
         entry.FinalPlacements = placements.Select(p => new ExperimentCsvLogStore.FinalPlacement { CardId = p.Key, Tier = p.Value }).ToArray();
         pending.Enqueue(entry); Drain();
@@ -183,6 +195,7 @@ public sealed class ExperimentLogger : MonoBehaviour
         entry.Condition = "Proposed"; entry.SnapshotId = snapshot.id;
         entry.IndependentAnswers = snapshot.participants.SelectMany(p => p.answers.Select(a => new ExperimentCsvLogStore.IndependentAnswer {
             ClientId = p.clientNo, CardId = a.cardId, Tier = a.tier, SelectedAt = a.selectedAt, SubmissionId = p.submissionId })).ToArray();
+        if(entry.Metadata!=null)Data.RecordCohort(entry.Metadata,snapshot.participants.Select(p=>p.clientNo).ToArray());
         pending.Enqueue(entry); Drain();
     }
     private void CaptureSnapshot()
@@ -201,7 +214,7 @@ public sealed class ExperimentLogger : MonoBehaviour
         }
     }
     private ExperimentCsvLogStore.Observation CreateObservation(string type, string id, string participant, string kind) => new ExperimentCsvLogStore.Observation {
-        SessionId = sessionManager.CurrentSessionId, Epoch = sessionManager.SessionEpoch, EventType = type, EventId = id, ParticipantId = participant,
+        Metadata = Data.Get(sessionManager.CurrentSessionId), SessionId = sessionManager.CurrentSessionId, Epoch = sessionManager.SessionEpoch, EventType = type, EventId = id, ParticipantId = participant,
         ObserverClientId = participantRegistry.Network != null ? participantRegistry.Network.ClientNo.ToString(CultureInfo.InvariantCulture) : "",
         ObservedAtUtc = DateTimeOffset.UtcNow, MonotonicSeconds = (double)Stopwatch.GetTimestamp() / Stopwatch.Frequency,
         ObservationKind = kind, CardSetId = sessionManager.CurrentCardSetId };
@@ -233,7 +246,7 @@ public sealed class ExperimentLogger : MonoBehaviour
         IsSaving = true;
         try
         {
-            if (store == null) { store = new ExperimentCsvLogStore(OutputDirectory); Debug.Log("[Experiment Logger] CSV root: " + store.RootDirectory, this); }
+            if (store == null) { store = new ExperimentCsvLogStore(OutputDirectory,observationRunId); Debug.Log("[Experiment Logger] CSV root: " + store.RootDirectory, this); }
             while (pending.Count > 0) { var entry = pending.Peek(); store.Record(entry); pending.Dequeue(); if (entry.FinalPlacements != null) savedFinal.Add(entry.SessionId); if (entry.IndependentAnswers != null) savedIndependent.Add(entry.SessionId); }
             LastError = "";
         }
@@ -242,6 +255,8 @@ public sealed class ExperimentLogger : MonoBehaviour
             nextRetry = Time.unscaledTime + 5;
             if (LastError != error.Message) Debug.LogError("[Experiment Logger] CSV save failed; event retained for retry: " + error.Message, this);
             LastError = error.Message;
+            if(pending.Count>0 && pending.Peek().Metadata!=null)
+            {var m=pending.Peek().Metadata;m.saveStatus="failed";try{var data=new ExperimentDataStore(OutputDirectory);data.Save(m);data.RebuildIndex();}catch{}}
         }
         finally { IsSaving = false; }
     }

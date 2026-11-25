@@ -20,6 +20,7 @@ public sealed class ExperimentCsvLogStore
         public FinalPlacement[] FinalPlacements;
         public IndependentAnswer[] IndependentAnswers;
         public string SnapshotId;
+        public ExperimentDataStore.Metadata Metadata;
     }
     public sealed class FinalPlacement { public string CardId, Tier; }
     public sealed class IndependentAnswer { public int ClientId; public string CardId, Tier, SelectedAt, SubmissionId; }
@@ -36,7 +37,7 @@ public sealed class ExperimentCsvLogStore
         {
             if (e.EventType != "BOARD_CONFIRMED" || e.FinalPlacements.Length == 0 || e.FinalPlacements.Any(r => r == null || string.IsNullOrEmpty(r.CardId) || !IsTier(r.Tier)) || e.FinalPlacements.Select(r => r.CardId).Distinct().Count() != e.FinalPlacements.Length) throw new InvalidDataException("Invalid final placements");
             var rows = e.FinalPlacements.OrderBy(r => r.CardId, StringComparer.Ordinal).Select(r => Prefix().Concat(new[] { r.CardId, r.Tier, observed }).ToArray());
-            SaveImmutable(Path.Combine(root, e.SessionId, "final_placements.csv"), FinalColumns, rows, 7);
+            SaveImmutable(Path.Combine(GetSessionDirectory(e.SessionId), "final_placements.csv"), FinalColumns, rows, 7);
         }
         if (e.IndependentAnswers != null)
         {
@@ -49,7 +50,7 @@ public sealed class ExperimentCsvLogStore
             if (e.IndependentAnswers.GroupBy(r => r.ClientId).Any(g => !cards.SetEquals(g.Select(r => r.CardId)) || g.Select(r => r.SubmissionId).Distinct().Count() != 1)) throw new InvalidDataException("Incomplete independent answer matrix");
             var rows = e.IndependentAnswers.OrderBy(r => r.ClientId).ThenBy(r => r.CardId, StringComparer.Ordinal).Select(r => Prefix().Concat(new[] {
                 r.ClientId.ToString(CultureInfo.InvariantCulture), r.CardId, r.Tier, r.SelectedAt, observed, e.SnapshotId, r.SubmissionId }).ToArray());
-            SaveImmutable(Path.Combine(root, e.SessionId, "independent_answers.csv"), IndependentColumns, rows, 9);
+            SaveImmutable(Path.Combine(GetSessionDirectory(e.SessionId), "independent_answers.csv"), IndependentColumns, rows, 9);
         }
     }
     // Ignore only the observation time on duplicate restoration. Every answer/identity must agree.
@@ -84,6 +85,15 @@ public sealed class ExperimentCsvLogStore
     };
     private const string TimeBasis = "experimenter_observation_utc; elapsed=local_monotonic_since_first_session_observation";
     private readonly string root;
+    private readonly Dictionary<string,ExperimentDataStore.Metadata> metadata = new Dictionary<string,ExperimentDataStore.Metadata>();
+    public string IndexError {get;private set;} = "";
+    public bool RebuildIndex(){var data=new ExperimentDataStore(root);bool ok=data.RebuildIndex();IndexError=data.IndexError;return ok;}
+    public string GetSessionDirectory(string id)
+    {
+        if(string.IsNullOrEmpty(id)||id.Length>128||id.Any(c=>!(char.IsLetterOrDigit(c)&&c<128||c=='-'||c=='_')))throw new ArgumentException("Invalid session directory ID");
+        if(!metadata.TryGetValue(id,out var m)){m=new ExperimentDataStore(root).Find(id);if(m!=null)metadata[id]=m;}
+        return m!=null?new ExperimentDataStore(root).DirectoryFor(m):Path.Combine(root,id);
+    }
     private readonly string runId;
     private readonly Dictionary<string, double?> origins = new Dictionary<string, double?>();
     private static readonly UTF8Encoding Utf8Bom = new UTF8Encoding(true);
@@ -101,7 +111,13 @@ public sealed class ExperimentCsvLogStore
     public bool Record(Observation entry)
     {
         Validate(entry);
-        string folder = Path.Combine(root, entry.SessionId);
+        var data = new ExperimentDataStore(root);
+        if(entry.Metadata!=null)
+        {
+            if(entry.Metadata.sessionId!=entry.SessionId || entry.Metadata.epoch!=entry.Epoch || entry.Metadata.cardSetId!=entry.CardSetId)throw new InvalidDataException("Observation metadata mismatch");
+            metadata[entry.SessionId]=entry.Metadata;data.Save(entry.Metadata);
+        }
+        string folder = GetSessionDirectory(entry.SessionId);
         string eventPath = Path.Combine(folder, "phase_events.csv");
         var rows = new List<string[]>();
         if (File.Exists(eventPath))
@@ -166,6 +182,18 @@ public sealed class ExperimentCsvLogStore
                     throw new InvalidDataException("Card set changed within Session " + entry.SessionId);
             }
             else WriteAtomic(setPath, new[] { new[] { "session_id", "card_set_id" }, new[] { entry.SessionId, entry.CardSetId } });
+        }
+        if(metadata.TryGetValue(entry.SessionId,out var m))
+        {
+            m.startedAtUtc=TimeOf("EXPERIMENT_STARTED");
+            var start=rows.FirstOrDefault(r=>r[3]=="EXPERIMENT_STARTED");
+            m.participantsAtStart=start==null?null:start[13].Split(new[]{';'},StringSplitOptions.RemoveEmptyEntries).Select(v=>int.Parse(v,CultureInfo.InvariantCulture)).Distinct().ToArray();
+            m.actualParticipantCount=m.participantsAtStart?.Length??0;
+            m.finishedAtUtc=TimeOf("BOARD_CONFIRMED");if(m.finishedAtUtc=="")m.finishedAtUtc=TimeOf("SESSION_ABORTED");
+            m.status=TimeOf("SESSION_ABORTED")!=""?"aborted":TimeOf("BOARD_CONFIRMED")!=""?"completed":m.startedAtUtc!=""?"in_progress":TimeOf("SESSION_RESET_COMPLETED")!=""?"prepared":"preparing";
+            bool answers=File.Exists(Path.Combine(folder,"final_placements.csv"))&&(m.condition!="Proposed"||File.Exists(Path.Combine(folder,"independent_answers.csv")));
+            m.saveStatus=m.status=="completed"&&!answers?"pending":"complete";
+            data.Save(m);data.RebuildIndex();IndexError=data.IndexError;
         }
         return !duplicate;
     }

@@ -80,7 +80,7 @@ public static class ExperimentLoggerVerification
             var flow = Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText("Library/ExperimentResultVerification/result.json"));
             Check((bool)flow["passed"], "All existing Normal / Proposed / Role / Reset / Result checks pass with Logger attached: " + (string)flow["failure"]);
             Check(!Directory.Exists(Path.Combine(integration, "client-1")) && !Directory.Exists(Path.Combine(integration, "client-2")), "Participant endpoints write no CSV files");
-            var folders = Directory.GetDirectories(Path.Combine(integration, "client-99"));
+            var folders = Directory.GetFiles(Path.Combine(integration, "client-99"),"phase_events.csv",SearchOption.AllDirectories).Select(Path.GetDirectoryName).ToArray();
             Check(folders.Length == 3, "Experimenter writes separate folders for all three Sessions including the final unstarted Session");
             var csvs = folders.Select(f => ExperimentCsvLogStore.ReadCsv(Path.Combine(f, "phase_events.csv"))).ToArray();
             var startedSessions = csvs.Where(rows => rows.Any(r => r[3] == "EXPERIMENT_STARTED")).ToArray();
@@ -102,7 +102,7 @@ public static class ExperimentLoggerVerification
             foreach (var rows in startedSessions)
             {
                 string folder = Path.Combine(sample, rows[1][2]); Directory.CreateDirectory(folder);
-                string source = folders.Single(f => Path.GetFileName(f) == rows[1][1]);
+                string source = folders.Single(f => (Path.GetFileName(f) == rows[1][1] || Path.GetFileName(f).EndsWith("_"+rows[1][1],StringComparison.Ordinal)));
                 foreach (string file in new[] { "session.csv", "phase_events.csv" }) File.Copy(Path.Combine(source, file), Path.Combine(folder, file));
             }
             report.passed = true;

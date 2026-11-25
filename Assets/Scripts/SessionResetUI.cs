@@ -22,13 +22,14 @@ public sealed class SessionResetUI : MonoBehaviour
     private TMP_Text status, prompt, current, data, draft, reason, details;
     private string displayedSession, lastRequestedSession, confirmationSession, confirmationConnections, confirmationDraft, message = "";
     private long confirmationEpoch;
-    private bool collapsed, showDetails;
+    private bool collapsed, showDetails, showDataManagement;
+    private ExperimentDataManagementUI dataManagementUI;
     public bool IsConfirmationOpen { get; private set; }
     public string StatusMessage => message;
     private bool IsAdmin => !Application.isMobilePlatform && registry != null && registry.IsLocalExperimenter;
     public bool CanReset => IsAdmin && registry.Network != null && registry.Network.IsReady && session != null && !session.IsResettingSession && (!IsCompleted || CompletedAndSaved);
     private string Connections => registry.Network == null || !registry.Network.IsReady ? "" : string.Join(",", registry.Network.GetAliveClients(includeStealthClients: true).OrderBy(x => x).Select(x => x + ":" + registry.Network.GetClientVariable(ExperimentParticipantRegistry.RoleVariable, x)));
-    private string DraftKey => session.DraftMode + ":" + session.DraftCardSetId + ":" + session.DraftExpectedParticipants;
+    private string DraftKey => session.DraftMode + ":" + session.DraftCardSetId + ":" + session.DraftExpectedParticipants + ":" + logger?.Data.DraftSignature;
     public void Configure(ExperimentSessionManager manager, ExperimentParticipantRegistry roles)
     { session = manager; registry = roles; lobby = manager.Lobby; logger = manager.GetComponent<ExperimentLogger>(); agreement = manager.gameObject.scene.GetRootGameObjects().SelectMany(o=>o.GetComponentsInChildren<FinalAgreementManager>(true)).SingleOrDefault(); }
     public void RequestConfirmation()
@@ -62,6 +63,8 @@ public sealed class SessionResetUI : MonoBehaviour
         controls.SetActive(!collapsed);
         resetButton.interactable = (CanReset || (IsAdmin && SaveFailed && logger != null && logger.IsOperational && !session.IsResettingSession)) && !IsConfirmationOpen; confirmButton.interactable = CanReset;
         resetButton.GetComponentInChildren<TMP_Text>().text = PreparationActionLabel;
+        foreach(string selection in new[]{"Normal","Proposed","SetA","SetB"})
+        {var child=controls.transform.Find(selection);if(child!=null)child.GetComponent<UnityEngine.UI.Button>().interactable=logger!=null && !logger.Data.IsControlled && !session.IsResettingSession;}
         startButton.interactable = lobby != null && lobby.CanStart && !IsConfirmationOpen;
         current.text = "現在のセッション（適用済み・読取専用）\n" +
             (session.HasAppliedSettings ? Mode(session.SessionMode) + " ／ カードセット " + session.CurrentCardSetId + " ／ 必要 " + session.AppliedExpectedParticipants + "人" : "適用済み設定なし：新規セッションの準備が必要です") +
@@ -71,19 +74,21 @@ public sealed class SessionResetUI : MonoBehaviour
             "\n初期化：ローカル " + (session.IsLocalInitialized ? "完了" : "待機中") + " ／ 参加者 " + session.InitializedParticipants + "人　全端末ACK：" + session.AcknowledgedCount + " / " + session.SyncTargetCount +
             "\n" + string.Join("　", registry.ParticipantClientNos.Select(x => "参加者 " + x + "：接続済み・" + (session.HasClientAcknowledged(x) ? "初期化済み" : "初期化待ち")));
         status.text = (IsCompleted ? "分類作業は終了しました：" + PreparationActionLabel : session.PreparationStatus) + "\n" + message;
-        draft.text = "次回の実験設定（現在の実験には影響しません）\n" + Mode(session.DraftMode) + " ／ カードセット " + session.DraftCardSetId + " ／ " + session.DraftExpectedParticipants + "人\n" + (session.HasDraftChanges ? "未適用の変更あり：新規準備が必要です" : "現在の設定と一致しています");
+        draft.text = "次回の実験設定 ／ " + (logger!=null?logger.Data.Draft.experimentType:"Test") + "（現在条件は変更されません）\n" + Mode(session.DraftMode) + " ／ カードセット " + session.DraftCardSetId + " ／ " + session.DraftExpectedParticipants + "人\n" + (session.HasDraftChanges || logger!=null && logger.Data.HasDraftChanges ? "未適用の変更あり：新規準備が必要です" : "現在の設定と一致しています");
         reason.text = IsCompleted ? (CompletedAndSaved ? "保存済みデータを保持して次回を準備できます" : "保存状態を確認してください。次回準備は保存完了後に行えます") : lobby == null ? "開始判定を取得できません" : lobby.CanStart ? "実験を開始できます" : lobby.StartBlockReason;
         data.text = logger == null ? "実験データ：Loggerがありません" : "実験データ ／ CSV：" + logger.SaveStatus + "　未保存：" + logger.UnsavedCount + "件\n最終回答：" + logger.FinalSaveStatus + "\n独立回答：" + logger.IndependentSaveStatus + "\n計時：" + (logger.HasMonotonicTiming ? "単調時計で計測可能" : "継続性未確認：新規準備が必要です");
+        dataManagementUI?.SetVisible(showDataManagement && !showDetails && !collapsed);
         details.text = showDetails ? "詳細（技術情報）\n準備元が同じ接続IDで復帰できない場合は、ログ保存を確認して全端末とRoomを再起動してください。\n" + session.LastFailure + "\n" + (logger != null ? logger.LastError + "\n保存先：" + logger.OutputDirectory : "") : "";
         dialog.SetActive(IsConfirmationOpen);
-        if (IsConfirmationOpen) prompt.text = "新規セッションを準備しますか？\n現在のセッションID：" + (string.IsNullOrEmpty(confirmationSession) ? "未作成" : confirmationSession) + "\n現在：" + CurrentPhase + "\n保存済みデータは保持されます。" + (IsCompleted ? "分類作業は正常に終了しています。" : lobby != null && lobby.IsExperimentStarted ? "進行中の実験を中断します。" : "") + "\n次回：" + Mode(session.DraftMode) + " ／ カードセット " + session.DraftCardSetId + " ／ " + session.DraftExpectedParticipants + "人";
+        if (IsConfirmationOpen) prompt.text = "新規セッションを準備しますか？\n現在のセッションID：" + (string.IsNullOrEmpty(confirmationSession) ? "未作成" : confirmationSession) + "\n現在：" + CurrentPhase + "\n保存済みデータは保持されます。" + (IsCompleted ? "分類作業は正常に終了しています。" : lobby != null && lobby.IsExperimentStarted ? "進行中の実験を中断します。" : "") + "\n次回：" + Mode(session.DraftMode) + " ／ カードセット " + session.DraftCardSetId + " ／ " + session.DraftExpectedParticipants + "人\n実験情報：" + logger?.Data.Draft.experimentType + " ／ ペア " + logger?.Data.Draft.pairId + " ／ " + logger?.Data.Draft.allocationGroup + " ／ " + logger?.Data.Draft.trialOrder + "回目";
     }
     private string CurrentPhase => lobby != null && lobby.IsExperimentStarted && lobby.CurrentState == "Idle"
         ? (session.SessionMode == ExperimentManager.ExperimentMode.Normal ? "共同分類中" : "独立回答中") : Phase(lobby != null ? lobby.CurrentState : "");
     public static string Mode(ExperimentManager.ExperimentMode mode) => mode == ExperimentManager.ExperimentMode.Normal ? "通常方式" : "提案方式";
     public static string Phase(string value) { switch (value) { case "Idle": return "待機中"; case "Answering": return "回答中"; case "WaitingForAnswers": return "回答待ち"; case "Revealed": return "回答公開済み"; case "Discussion": return "共同分類中"; case "Confirmed": return "確定済み"; default: return "未確認"; } }
     private static string Short(string value) => string.IsNullOrEmpty(value) ? "未作成" : value.Substring(0, Math.Min(12, value.Length)) + "…";
-    private void Select(ExperimentManager.ExperimentMode? mode = null, string set = null, int? count = null) => session.SetDraft(mode ?? session.DraftMode, set ?? session.DraftCardSetId, count ?? session.DraftExpectedParticipants);
+    private void Select(ExperimentManager.ExperimentMode? mode = null, string set = null, int? count = null)
+    { if(!session.SetDraft(mode ?? session.DraftMode,set ?? session.DraftCardSetId,count ?? session.DraftExpectedParticipants))message="Pilot／Mainの方式・セットは割当と試行順序から決まります"; }
     private void RetrySave() { if (IsAdmin && logger != null) { message = logger.RetrySave() ? "保存の再試行が完了しました" : "保存できませんでした。詳細を確認してください"; Refresh(); } }
     private void OpenFolder() { if (!IsAdmin || logger == null) return; try { if (System.IO.Directory.Exists(logger.OutputDirectory)) Application.OpenURL(new Uri(logger.OutputDirectory + System.IO.Path.DirectorySeparatorChar).AbsoluteUri); else message = "保存先は最初の保存成功時に作成されます"; } catch { message = "保存先を開けません。パスをコピーして確認してください"; } }
     private void OnDisable() { IsConfirmationOpen = false; if (canvasRoot != null) canvasRoot.SetActive(false); }
@@ -116,6 +121,7 @@ public sealed class SessionResetUI : MonoBehaviour
         var scaler = canvasRoot.GetComponent<UnityEngine.UI.CanvasScaler>(); scaler.uiScaleMode = UnityEngine.UI.CanvasScaler.ScaleMode.ScaleWithScreenSize; scaler.referenceResolution = new Vector2(1920,1080); scaler.matchWidthOrHeight = 1;
         controls = Rect("Management", canvasRoot.transform, new Vector2(0,1), new Vector2(16,-68), new Vector2(850,990)).gameObject;
         var bg = controls.AddComponent<RoundedPanelGraphic>(); bg.color = new Color(.035f,.055f,.085f,.97f);
+        if(logger!=null) { dataManagementUI=new ExperimentDataManagementUI(logger,registry,canvasRoot.transform,japaneseFont); Button("EditMetadata",canvasRoot.transform,new Vector2(340,-16),new Vector2(330,44),"実験情報・参加者ID",()=>{showDataManagement=!showDataManagement;showDetails=false;}); }
         Button("Collapse", canvasRoot.transform, new Vector2(16,-16), new Vector2(310,44), "実験者管理　表示／折り畳み", () => collapsed = !collapsed);
         Panel("CurrentSection", controls.transform, new Vector2(10,-8), new Vector2(830,280), new Color(.04f,.10f,.13f));
         Panel("DraftSection", controls.transform, new Vector2(10,-380), new Vector2(830,210), new Color(.065f,.085f,.14f));

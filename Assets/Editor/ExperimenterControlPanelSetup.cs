@@ -15,7 +15,7 @@ public static class ExperimenterControlPanelSetup
     {
         const string path = "Assets/Resources/ExperimenterJapanese SDF.asset";
         Directory.CreateDirectory("Assets/Resources"); AssetDatabase.Refresh();
-        string[] sources = { "SessionResetUI", "ExperimentSessionManager", "ExperimentLobbyController", "ExperimentLogger" };
+        string[] sources = { "SessionResetUI", "ExperimentSessionManager", "ExperimentLobbyController", "ExperimentLogger", "ExperimentDataManagementUI", "ExperimentDataPlan", "ExperimentDataManagement" };
         string glyphs = string.Concat(sources.Select(n => File.ReadAllText("Assets/Scripts/" + n + ".cs")));
         glyphs += string.Concat(Enumerable.Range(32,95).Select(x => (char)x));
         glyphs = new string(glyphs.Where(c => !char.IsControl(c)).Distinct().OrderBy(c => c).ToArray());

@@ -106,8 +106,8 @@ public static class ExperimenterControlPanelVerification
             Call(logger,"OnDisable"); Check(!logger.IsPreparedInCurrentRun,"Logger disable invalidates preparation proof"); Call(logger,"OnEnable");
             Check(!logger.IsPreparedInCurrentRun && exp.session.CurrentSessionId==id && exp.lobby.IsExperimentStarted,"Restored trial is preserved without automatic Reset");
             Check(exp.session.StartNewSession(),"Explicit abort uses existing Reset"); Deliver(exp); Tick();
-            Check(!File.Exists(Path.Combine(logger.OutputDirectory,id,"final_placements.csv")),"Unconfirmed answers are not invented");
-            Check(ExperimentCsvLogStore.ReadCsv(Path.Combine(logger.OutputDirectory,id,"phase_events.csv")).Skip(1).Any(row=>row[3]=="SESSION_ABORTED"),"Aborted trial is recorded");
+            Check(!File.Exists(Path.Combine(logger.SessionDirectory(id),"final_placements.csv")),"Unconfirmed answers are not invented");
+            Check(ExperimentCsvLogStore.ReadCsv(Path.Combine(logger.SessionDirectory(id),"phase_events.csv")).Skip(1).Any(row=>row[3]=="SESSION_ABORTED"),"Aborted trial is recorded");
             exp.session.SetDraft(ExperimentManager.ExperimentMode.Normal,"A",2); Check(exp.session.StartNewSession(),"Prepare for logger guard checks"); Deliver(exp); Tick();
             Call(logger,"OnDisable"); Check(!exp.lobby.StartExperiment(),"Inactive Logger blocks Start"); Call(logger,"OnEnable");
             Check(!exp.lobby.StartExperiment(),"Reenabled Logger requires new preparation");
