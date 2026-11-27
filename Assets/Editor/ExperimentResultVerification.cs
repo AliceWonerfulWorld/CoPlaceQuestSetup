@@ -41,6 +41,11 @@ public static class ExperimentResultVerification
                 Set(logger, "outputRootOverride", Path.Combine(logRoot, "client-" + e.net.ClientNo));
                 Call(logger, "OnEnable"); Call(logger, "Start");
             }
+            bool Place(ProposedRevealVerification.Endpoint from, string card, string tier) =>
+                logRoot == null ? from.placements.SendPlacement(card, tier) :
+                (bool)typeof(NormalPlacementSync).GetMethod("SendPlacement", Flags, null,
+                    new[] { typeof(string), typeof(string), typeof(bool) }, null)
+                    .Invoke(from.placements, new object[] { card, tier, true });
             void Deliver(ProposedRevealVerification.Endpoint from) { foreach (var to in group) if (from != to) ProposedRevealVerification.Deliver(from, to); }
             foreach (var e in group) Deliver(e);
             void Tick(int count = 1)
@@ -115,7 +120,7 @@ public static class ExperimentResultVerification
             Check(group.All(e => e.session.CurrentSessionId == session && e.session.SessionEpoch == 1), "Start never creates or resets Session automatically");
             Check(a.placements.IsSharedPlacementPhase && b.placements.IsSharedPlacementPhase && Main(a).All(c => c.GetComponent<Renderer>().enabled) &&
                 group.All(e => !e.privateBoard.IsVisible && e.view.DisplayedParticipantCount == 0), "Normal Start restores Main and keeps Private/Reveal hidden");
-            Check(a.placements.SendPlacement("Card_03", "A") && a.placements.SendPlacement("Card_01", "B") && a.placements.SendPlacement("Card_02", "D"), "Normal placement works in arbitrary order after Lobby Start");
+            Check(Place(a, "Card_03", "A") && Place(a, "Card_01", "B") && Place(a, "Card_02", "D"), "Normal placement works in arbitrary order after Lobby Start");
             Deliver(a); Tick(2);
             Check(Main(exp).Select(c => c.CurrentTier).SequenceEqual(new[] { "B", "D", "A" }),
                 "Experimenter receives and displays Participant Main placements");
@@ -218,7 +223,7 @@ public static class ExperimentResultVerification
             Check(!exp.placements.CanLocalEditSharedBoard && !exp.placements.SendPlacement("Card_01", "A") &&
                 Main(exp).All(c => !c.Process(null, null)) && !exp.agreement.CanToggleReady,
                 "Proposed shared phase uses the same Experimenter readonly permissions");
-            Check(b.placements.SendPlacement("Card_03", "C") && b.placements.SendPlacement("Card_01", "D") && b.placements.SendPlacement("Card_02", "A"), "Proposed Main accepts shared final placements");
+            Check(Place(b, "Card_03", "C") && Place(b, "Card_01", "D") && Place(b, "Card_02", "A"), "Proposed Main accepts shared final placements");
             Deliver(b); Tick(2); Check(Main(a).Select(c => c.CurrentTier).SequenceEqual(new[] { "D", "A", "C" }), "Proposed Main placements synchronize after Reveal");
             a.agreement.ToggleLocalReady(); Deliver(a); b.agreement.ToggleLocalReady(); Deliver(b); Tick(4);
             Check(group.All(e => e.agreement.IsBoardConfirmed && e.view.DisplayedParticipantCount == 2), "Proposed Final Agreement preserves readonly initial reference UI");

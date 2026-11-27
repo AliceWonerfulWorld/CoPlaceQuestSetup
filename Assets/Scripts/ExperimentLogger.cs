@@ -34,7 +34,8 @@ public sealed class ExperimentLogger : MonoBehaviour
     private string liveSession;
     private ExperimentCsvLogStore.Observation pendingAbort;
     private float nextRetry;
-    private string preparedSession;
+    private string preparedSession, cardLoggingSession;
+    private NormalPlacementSync placement;
     private readonly HashSet<string> savedFinal = new HashSet<string>(), savedIndependent = new HashSet<string>();
     public bool IsOperational => isActiveAndEnabled && subscribed && CanWrite;
     public bool IsSaving { get; private set; }
@@ -45,7 +46,7 @@ public sealed class ExperimentLogger : MonoBehaviour
     public string FinalSaveStatus => finalAgreement == null || !finalAgreement.IsBoardConfirmed ? "まだ保存対象ではありません" : savedFinal.Contains(sessionManager.CurrentSessionId) ? "保存済み" : "未保存";
     public string IndependentSaveStatus => reveal == null || !reveal.HasRevealed || sessionManager.CurrentMode != ExperimentManager.ExperimentMode.Proposed ? "まだ保存対象ではありません" : savedIndependent.Contains(sessionManager.CurrentSessionId) ? "保存済み" : "未保存";
     public bool AreRequiredAnswersSaved => sessionManager != null && finalAgreement != null && finalAgreement.IsBoardConfirmed &&
-        savedFinal.Contains(sessionManager.CurrentSessionId) &&
+        pending.Count == 0 && LastError == "" && savedFinal.Contains(sessionManager.CurrentSessionId) &&
         (sessionManager.CurrentMode != ExperimentManager.ExperimentMode.Proposed || savedIndependent.Contains(sessionManager.CurrentSessionId));
     internal void MarkPreparationRequested(string id) { if (IsOperational) { preparedSession = id; try{Data.PersistPreparation(id);}catch(Exception error){LastError=error.Message;} } }
     public bool RetrySave() { if (!IsOperational) return false; try { if(preparedSession!=null)Data.PersistPreparation(preparedSession); CaptureSnapshot(); Drain(); } catch (Exception error) { LastError = error.Message; } return pending.Count == 0 && LastError == ""; }
@@ -65,6 +66,7 @@ public sealed class ExperimentLogger : MonoBehaviour
         finalAgreement.OnBoardConfirmed += OnBoardConfirmed;
         if (reveal != null) reveal.OnRevealChanged += OnRevealed;
         if (shared != null) shared.OnSharedClassificationStarted += OnSharedStarted;
+        placement = InScene<NormalPlacementSync>();
         subscribed = true; SubscribeNetwork(); CaptureSnapshot();
     }
     private void SubscribeNetwork()
@@ -75,16 +77,17 @@ public sealed class ExperimentLogger : MonoBehaviour
         network.OnReady.AddListener(OnNetworkReady);
         network.OnAvatarDisconnected.AddListener(OnDeviceDisconnected);
         network.OnClientVariableChanged.AddListener(OnClientChanged);
+        network.OnGlobalVariableChanged.AddListener(OnPlacementChanged);
         if (network.IsReady) OnNetworkReady();
     }
     private void OnDeviceDisconnected(int client)=>dataManagement?.InvalidateBinding(client);
-    private void OnNetworkReady() { dataManagement?.InvalidateBindings(); liveSession = null; baselineNeeded = true; }
+    private void OnNetworkReady() { StopCardObservation(); dataManagement?.InvalidateBindings(); liveSession = null; baselineNeeded = true; }
     private void Start() { wasWriter = CanWrite; SubscribeNetwork(); CaptureSnapshot(); }
     private void Update()
     {
         dataManagement?.ObserveConnections();
         SubscribeNetwork();
-        if (network == null || !network.IsReady) { liveSession = null; baselineNeeded = true; }
+        if (network == null || !network.IsReady) { StopCardObservation(); liveSession = null; baselineNeeded = true; }
         if (CanWrite && !wasWriter) { liveSession = null; baselineNeeded = true; }
         wasWriter = CanWrite;
         if (baselineNeeded && CanWrite && network != null && network.IsReady && !sessionManager.IsResettingSession &&
@@ -108,14 +111,17 @@ public sealed class ExperimentLogger : MonoBehaviour
             if (shared != null) shared.OnSharedClassificationStarted -= OnSharedStarted;
         }
         if (network != null) { network.OnReady.RemoveListener(OnNetworkReady);
-            network.OnAvatarDisconnected.RemoveListener(OnDeviceDisconnected); network.OnClientVariableChanged.RemoveListener(OnClientChanged); }
+            network.OnAvatarDisconnected.RemoveListener(OnDeviceDisconnected); network.OnClientVariableChanged.RemoveListener(OnClientChanged);
+            network.OnGlobalVariableChanged.RemoveListener(OnPlacementChanged); }
+        StopCardObservation();
         preparedSession = null;
         subscribed = false; network = null; liveSession = null; Drain();
     }
-    private void OnApplicationQuit() => Drain();
+    private void OnApplicationQuit() { StopCardObservation(); Drain(); }
     private void EnsureSession(string id, string kind) => RecordEvent("SESSION_CREATED", id + ":SESSION_CREATED", observationKind: kind);
     private void OnResetStarted(string id)
     {
+        cardLoggingSession = null;
         observedSubmissions.Clear();
         if (!CanWrite) return;
         liveSession = sessionManager.HasResetControl ? id : null;
@@ -131,6 +137,12 @@ public sealed class ExperimentLogger : MonoBehaviour
     {
         if (!CanWrite) return;
         EnsureSession(id, "retained_snapshot"); RecordStart(id, startId, mode, Kind);
+        if (id != preparedSession || Kind != "notification" || placement == null || network == null || !network.IsReady) return;
+        cardLoggingSession = id;
+        var entry = CreateObservation("CARD_LOG_INITIALIZED", id + ":CARD_LOG_INITIALIZED", "", Kind);
+        entry.InitializeCardLog = true;
+        pending.Enqueue(entry);
+        Drain();
     }
     private void RecordStart(string id, string startId, ExperimentManager.ExperimentMode mode, string kind)
     {
@@ -145,6 +157,46 @@ public sealed class ExperimentLogger : MonoBehaviour
     {
         if (CanWrite && lobby.IsExperimentStarted && shared.IsActive)
             RecordEvent("SHARED_CLASSIFICATION_STARTED", sessionManager.CurrentSessionId + ":SHARED_CLASSIFICATION_STARTED:" + id, observationKind: Kind);
+    }
+    private void StopCardObservation()
+    {
+        string id = cardLoggingSession;
+        cardLoggingSession = null;
+        if (id != null && id == sessionManager.CurrentSessionId && !finalAgreement.IsBoardConfirmed)
+            RecordEvent("CARD_LOG_OBSERVATION_INTERRUPTED", id + ":CARD_LOG_OBSERVATION_INTERRUPTED");
+    }
+
+    private void OnPlacementChanged(string key, string previous, string raw)
+    {
+        if (!IsOperational || network == null || !network.IsReady || cardLoggingSession == null ||
+            cardLoggingSession != sessionManager.CurrentSessionId || sessionManager.IsResettingSession ||
+            !lobby.IsExperimentStarted || finalAgreement.IsBoardConfirmed || placement == null ||
+            !placement.IsSharedPlacementPhase || key == null ||
+            !key.StartsWith(NormalPlacementSync.VariablePrefix, StringComparison.Ordinal)) return;
+
+        var operation = SessionVariableTransport.ReadPlacementOperation(sessionManager, raw);
+        if (operation == null || operation.client <= 0 || operation.client == network.ClientNo) return;
+        var card = key.Substring(NormalPlacementSync.VariablePrefix.Length);
+        var tier = SessionVariableTransport.Decode(sessionManager, raw);
+        if (placement.GetCard(card) == null || !ExperimentCsvLogStore.IsPlacementTier(tier)) return;
+
+        var applied = Data.Applied;
+        if (applied == null || applied.sessionId != cardLoggingSession || applied.epoch != operation.epoch) return;
+        var role = network.GetClientVariable(ExperimentParticipantRegistry.RoleVariable, operation.client);
+        var device = Data.DeviceKey(operation.client);
+        bool sameDevice = !string.IsNullOrEmpty(device) && device == operation.deviceKey;
+        if (sameDevice && role == "Experimenter") return;
+        string participant = "";
+        if (sameDevice) Data.TryResolveParticipant(operation.client, out participant);
+
+        var entry = CreateObservation("CARD_PLACEMENT_COMMITTED", operation.id, participant, Kind);
+        var prior = SessionVariableTransport.Decode(sessionManager, previous);
+        entry.CardOperation = new ExperimentCsvLogStore.CardOperation {
+            Client = operation.client, Card = card, ToTier = tier,
+            FromTier = ExperimentCsvLogStore.IsPlacementTier(prior) ? prior : ""
+        };
+        pending.Enqueue(entry);
+        Drain();
     }
     private void OnClientChanged(int client, string name, string oldValue, string value)
     {

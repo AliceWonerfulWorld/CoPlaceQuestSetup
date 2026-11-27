@@ -20,7 +20,51 @@ public sealed class ExperimentCsvLogStore
         public FinalPlacement[] FinalPlacements;
         public IndependentAnswer[] IndependentAnswers;
         public string SnapshotId;
+        public bool InitializeCardLog;
+        public CardOperation CardOperation;
         public ExperimentDataStore.Metadata Metadata;
+    }
+    public sealed class CardOperation { public int Client; public string Card, FromTier, ToTier; }
+    private static readonly string[] CardColumns = {
+        "schema_version", "session_id", "session_epoch", "condition", "card_set_id", "phase",
+        "event_id", "operation_id", "event_type", "participant_id", "participant_client_id", "card_id",
+        "from_tier", "to_tier", "observed_time_utc", "session_elapsed_seconds", "observer_run_id"
+    };
+    internal static bool IsPlacementTier(string tier) => tier == "Unclassified" || IsTier(tier);
+
+    private bool SaveCardLog(string folder, Observation entry, string condition, string elapsed)
+    {
+        if (condition != "Normal" && condition != "Proposed" || entry.Epoch <= 0 || string.IsNullOrEmpty(entry.CardSetId))
+            throw new InvalidDataException("Missing card log session metadata");
+        string epoch = entry.Epoch.ToString(CultureInfo.InvariantCulture);
+        string path = Path.Combine(folder, "card_operations.csv");
+        bool exists = File.Exists(path);
+        var rows = exists ? ReadCsv(path) : new List<string[]> { CardColumns };
+        if (rows.Count == 0 || !rows[0].SequenceEqual(CardColumns) || rows.Skip(1).Any(r =>
+            r.Length != CardColumns.Length || r[1] != entry.SessionId || r[2] != epoch ||
+            r[3] != condition || r[4] != entry.CardSetId))
+            throw new InvalidDataException("Invalid card operation log: " + path);
+
+        var operation = entry.CardOperation;
+        if (operation == null)
+        {
+            if (!exists) WriteAtomic(path, rows);
+            return !exists;
+        }
+
+        if (!exists || operation.Client <= 0 || string.IsNullOrEmpty(operation.Card) || !IsPlacementTier(operation.ToTier) ||
+            (operation.FromTier != "" && !IsPlacementTier(operation.FromTier)))
+            throw new InvalidDataException("Invalid card placement observation");
+        string eventId = entry.EventId + ":" + entry.EventType;
+        if (rows.Skip(1).Any(r => r[6] == eventId)) return false;
+        rows.Add(new[] {
+            "1", entry.SessionId, epoch, condition, entry.CardSetId, "shared_classification",
+            eventId, entry.EventId, entry.EventType, entry.ParticipantId ?? "",
+            operation.Client.ToString(CultureInfo.InvariantCulture), operation.Card, operation.FromTier, operation.ToTier,
+            entry.ObservedAtUtc.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture), elapsed, runId
+        });
+        WriteAtomic(path, rows);
+        return true;
     }
     public sealed class FinalPlacement { public string CardId, Tier; }
     public sealed class IndependentAnswer { public int ClientId; public string CardId, Tier, SelectedAt, SubmissionId; }
@@ -141,7 +185,8 @@ public sealed class ExperimentCsvLogStore
             origin = rows.Count == 0 ? entry.MonotonicSeconds : (double?)null;
             origins.Add(entry.SessionId, origin);
         }
-        bool duplicate = rows.Any(r => r[7] == entry.EventId);
+        bool phaseDuplicate = rows.Any(r => r[7] == entry.EventId);
+        bool duplicate = phaseDuplicate;
         string condition = rows.Select(r => r[2]).FirstOrDefault(c => !string.IsNullOrEmpty(c)) ?? "";
         if (!string.IsNullOrEmpty(entry.Condition))
         {
@@ -153,9 +198,11 @@ public sealed class ExperimentCsvLogStore
         // Persist immutable answers before acknowledging their phase event as saved.
         if ((entry.FinalPlacements != null || entry.IndependentAnswers != null) && condition != entry.Condition) throw new InvalidDataException("Snapshot Condition mismatch");
         SaveSnapshots(entry);
-        if (!duplicate)
+        string elapsed = origin.HasValue ? Math.Max(0, entry.MonotonicSeconds - origin.Value).ToString("F6", CultureInfo.InvariantCulture) : "";
+        if (entry.InitializeCardLog || entry.CardOperation != null)
+            duplicate = !SaveCardLog(folder, entry, condition, elapsed);
+        if (!phaseDuplicate && entry.CardOperation == null)
         {
-            string elapsed = origin.HasValue ? Math.Max(0, entry.MonotonicSeconds - origin.Value).ToString("F6", CultureInfo.InvariantCulture) : "";
             rows.Add(new[] { "1", entry.SessionId, condition, entry.EventType,
                 entry.ObservedAtUtc.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture), elapsed,
                 entry.ParticipantId ?? "", entry.EventId, entry.Epoch.ToString(CultureInfo.InvariantCulture),
@@ -192,7 +239,9 @@ public sealed class ExperimentCsvLogStore
             m.finishedAtUtc=TimeOf("BOARD_CONFIRMED");if(m.finishedAtUtc=="")m.finishedAtUtc=TimeOf("SESSION_ABORTED");
             m.status=TimeOf("SESSION_ABORTED")!=""?"aborted":TimeOf("BOARD_CONFIRMED")!=""?"completed":m.startedAtUtc!=""?"in_progress":TimeOf("SESSION_RESET_COMPLETED")!=""?"prepared":"preparing";
             bool answers=File.Exists(Path.Combine(folder,"final_placements.csv"))&&(m.condition!="Proposed"||File.Exists(Path.Combine(folder,"independent_answers.csv")));
-            m.saveStatus=m.status=="completed"&&!answers?"pending":"complete";
+            bool cardLogSaved = !rows.Any(r => r[3] == "CARD_LOG_INITIALIZED") ||
+                File.Exists(Path.Combine(folder, "card_operations.csv"));
+            m.saveStatus = (m.status == "completed" && !answers) || !cardLogSaved ? "pending" : "complete";
             data.Save(m);data.RebuildIndex();IndexError=data.IndexError;
         }
         return !duplicate;

@@ -5,7 +5,7 @@ using UnityEngine;
 
 public partial class NormalPlacementSync : MonoBehaviour
 {
-    private const string VariablePrefix = "normalPlacement_";
+    internal const string VariablePrefix = "normalPlacement_";
 
     [SerializeField] private ExperimentManager experimentManager;
     [SerializeField] private NetSyncManager netSyncManager;
@@ -150,7 +150,9 @@ public partial class NormalPlacementSync : MonoBehaviour
     }
     public void RestoreSessionPlacements() { Subscribe(); if (IsSharedPlacementPhase && subscribedManager != null && subscribedManager.IsReady) ReadSharedPlacements(); }
 
-    public bool SendPlacement(string cardId, string tierId)
+    public bool SendPlacement(string cardId, string tierId) => SendPlacement(cardId, tierId, false);
+
+    internal bool SendPlacement(string cardId, string tierId, bool xrRelease)
     {
         if (IsResettingSession || !isActiveAndEnabled || !CanLocalEditSharedBoard) return false;
         if (RejectLocalInteraction(cardId)) return false;
@@ -169,7 +171,16 @@ public partial class NormalPlacementSync : MonoBehaviour
         }
 
         if (finalAgreement != null && !finalAgreement.PreparePlacementChange(cardId, tierId)) return false;
-        if (!SessionVariableTransport.SetGlobalVariable(subscribedManager, sessionManager, VariablePrefix + cardId, tierId))
+        string key = VariablePrefix + cardId;
+        bool sent = xrRelease && sessionManager != null && !string.IsNullOrEmpty(sessionManager.CurrentSessionId)
+            ? subscribedManager.SetGlobalVariable(key, SessionVariableTransport.EncodePlacement(sessionManager, tierId,
+                new SessionVariableTransport.PlacementOperation {
+                    id = Guid.NewGuid().ToString("N"), epoch = sessionManager.SessionEpoch,
+                    client = subscribedManager.ClientNo,
+                    deviceKey = ExperimentDataManagement.HashDevice(subscribedManager.DeviceId)
+                }))
+            : SessionVariableTransport.SetGlobalVariable(subscribedManager, sessionManager, key, tierId);
+        if (!sent)
         {
             Debug.LogWarning($"[Normal Placement] Placement send failed: {cardId} / {tierId}", this);
             return false;

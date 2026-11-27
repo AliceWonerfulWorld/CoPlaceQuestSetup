@@ -183,7 +183,7 @@ public class CardTierDetector : MonoBehaviour, UnityEngine.XR.Interaction.Toolki
         Transform point = target.GetAvailableSnapPoint(gameObject);
         if (point == null) { RestorePreviousPlacement(); return; }
         // Commit through the existing transport before moving; a rejected send must restore the old placement.
-        if (!normalPlacementSync.SendPlacement(gameObject.name, target.tierName))
+        if (!normalPlacementSync.SendPlacement(gameObject.name, target.tierName, true))
         {
             if (currentZone != target) target.ReleaseCard(gameObject);
             RestorePreviousPlacement(); return;

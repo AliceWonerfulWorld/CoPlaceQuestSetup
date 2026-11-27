@@ -6,6 +6,38 @@ using UnityEngine;
 public static class SessionVariableTransport
 {
     [Serializable] private class Value { public string session; public string value; public string repair; }
+    // JsonUtility expands null fields on write, so ordinary session values
+    // must use a separate DTO to keep their wire format and size unchanged.
+    [Serializable] private class PlacementValue
+    {
+        public string session;
+        public string value;
+        public PlacementOperation operation;
+    }
+
+    [Serializable] public sealed class PlacementOperation
+    {
+        public string id, deviceKey;
+        public int client;
+        public long epoch;
+    }
+
+    public static string EncodePlacement(ExperimentSessionManager session, string tier, PlacementOperation operation) =>
+        JsonUtility.ToJson(new PlacementValue { session = session.CurrentSessionId, value = tier, operation = operation });
+
+    public static PlacementOperation ReadPlacementOperation(ExperimentSessionManager session, string raw)
+    {
+        if (string.IsNullOrEmpty(raw) || session == null) return null;
+        try
+        {
+            var envelope = JsonUtility.FromJson<PlacementValue>(raw);
+            var operation = envelope?.operation;
+            return operation != null && envelope.session == session.CurrentSessionId
+                && operation.epoch == session.SessionEpoch && Guid.TryParseExact(operation.id, "N", out _) ? operation : null;
+        }
+        catch (ArgumentException) { return null; }
+    }
+
     public static string Encode(ExperimentSessionManager session, string value) => session == null || string.IsNullOrEmpty(session.CurrentSessionId)
         ? value : JsonUtility.ToJson(new Value { session = session.CurrentSessionId, value = value });
     // NetSync deduplicates last-sent wire values. A repair token makes a restored
