@@ -54,6 +54,42 @@ public class FinalAgreementManager : MonoBehaviour
         public FinalEntry[] placements;
     }
 
+    // Version 2 keeps the snapshot atomic while fitting the NetSync value limit.
+    // The same fingerprint serves as the ready proof and the snapshot checksum.
+    [Serializable] private class CompactBoardRecord
+    {
+        public int v;
+        public string s, f;
+        public int[] p;
+        public CompactEntry[] e;
+    }
+    [Serializable] private class CompactEntry { public string c, t, r; }
+
+    private static string EncodeConfirmedBoard(BoardRecord record)
+    {
+        var entries = Array.ConvertAll(record.placements, entry => new CompactEntry {
+            c = entry.cardId, t = entry.tier, r = entry.revision
+        });
+        return JsonUtility.ToJson(new CompactBoardRecord {
+            v = 2, s = record.sessionId, f = record.fingerprint, p = record.participants, e = entries
+        });
+    }
+
+    private static BoardRecord DecodeBoard(string value)
+    {
+        var compact = JsonUtility.FromJson<CompactBoardRecord>(value);
+        if (compact == null) return null;
+        if (compact.v == 0) return JsonUtility.FromJson<BoardRecord>(value);
+        if (compact.v != 2 || compact.e == null) return null;
+        return new BoardRecord {
+            confirmed = true, sessionId = compact.s, fingerprint = compact.f,
+            readyProof = compact.f, participants = compact.p,
+            placements = Array.ConvertAll(compact.e, entry => entry == null ? null : new FinalEntry {
+                cardId = entry.c, tier = entry.t, revision = entry.r
+            })
+        };
+    }
+
     public IReadOnlyDictionary<string, string> GetFinalPlacements() => new Dictionary<string, string>(finalPlacements);
     public string GetFinalTier(string cardId) => cardId != null && finalPlacements.TryGetValue(cardId, out var tier) ? tier : null;
     private bool SessionResetting => sessionManager != null && sessionManager.IsResettingSession;
@@ -145,7 +181,7 @@ public class FinalAgreementManager : MonoBehaviour
         var record = new BoardRecord { confirmed = true, sessionId = sessionId, fingerprint = fingerprint, participants = peers.ToArray(), readyProof = fingerprint, placements = entries };
         nextPublishAttempt = Time.unscaledTime + 1f;
         Debug.Log("[Final Agreement Complete] All participants ready");
-        string payload = JsonUtility.ToJson(record);
+        string payload = EncodeConfirmedBoard(record);
         if (Encoding.UTF8.GetByteCount(SessionVariableTransport.Encode(sessionManager, payload)) > 1024)
         {
             StatusMessage = "Board result exceeds NetSync variable limit";
@@ -284,7 +320,7 @@ public class FinalAgreementManager : MonoBehaviour
     {
         if (!IsAgreementPhase || string.IsNullOrEmpty(value)) return;
         BoardRecord record;
-        try { record = JsonUtility.FromJson<BoardRecord>(value); } catch { return; }
+        try { record = DecodeBoard(value); } catch { return; }
         if (record == null || string.IsNullOrEmpty(record.sessionId)) return;
         if (!IsNormalPhase && record.sessionId != placementSync.SharedAgreementId) return;
         if (!record.confirmed)
@@ -303,7 +339,7 @@ public class FinalAgreementManager : MonoBehaviour
             return;
         }
         if (record.placements == null || record.participants == null || record.participants.Length == 0 ||
-            record.readyProof != record.fingerprint) return;
+            string.IsNullOrEmpty(record.fingerprint) || record.readyProof != record.fingerprint) return;
         var snapshot = new Dictionary<string, string>();
         foreach (var entry in record.placements)
             if (entry == null || !IsTier(entry.tier) || string.IsNullOrEmpty(entry.revision) || placementSync.GetCard(entry.cardId) == null || !snapshot.TryAdd(entry.cardId, entry.tier)) return;

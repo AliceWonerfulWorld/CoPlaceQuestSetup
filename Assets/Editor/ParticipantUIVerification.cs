@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using Newtonsoft.Json.Linq;
 using TMPro;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -144,7 +145,23 @@ public static class ParticipantUIVerification
                     else Check(people.All(e=>!e.view.ToggleReference()),tag+" Normal has no reference operation");
                     a.agreement.ToggleLocalReady();ParticipantVerificationSession.Call(a.components.OfType<FinalAgreementUI>().Single(),"Update");
                     Check(!a.agreement.IsLocalReady && Get<TMP_Text>(a.components.OfType<FinalAgreementUI>().Single(),"statusText").text.Contains("未分類"),tag+" unclassified agreement rejection explained in Japanese");
-                    foreach(string id in ids) Check(a.placements.SendPlacement(id,"C"),tag+" shared placement works with reference open "+id);
+                    bool TaggedPlacement(ProposedRevealVerification.Endpoint sender, string id) =>
+                        (bool)typeof(NormalPlacementSync).GetMethod("SendPlacement", Flags, null,
+                            new[] { typeof(string), typeof(string), typeof(bool) }, null)
+                            .Invoke(sender.placements, new object[] { id, "C", true });
+                    ParticipantVerificationSession.Set(a.net, "_deviceId", "card-regression-device-a");
+                    Check(ids.Length == 8, tag+" all eight experimental cards are active");
+                    foreach(string id in ids) Check(TaggedPlacement(a, id),tag+" shared placement works with reference open "+id);
+                    string placementKey = "normalPlacement_" + ids[0];
+                    string versionKey = "normalPlacementVersion_" + ids[0];
+                    string taggedWire = a.net.GetGlobalVariable(placementKey);
+                    string untaggedWire = SessionVariableTransport.Encode(a.session, "C");
+                    int taggedBytes = System.Text.Encoding.UTF8.GetByteCount(taggedWire);
+                    int untaggedBytes = System.Text.Encoding.UTF8.GetByteCount(untaggedWire);
+                    Check(JObject.Parse(untaggedWire).Property("operation") == null &&
+                        taggedBytes > untaggedBytes && taggedBytes <= 1024 &&
+                        SessionVariableTransport.Decode(a.session, taggedWire) == "C",
+                        tag+" tagged placement bytes "+taggedBytes+" / untagged "+untaggedBytes);
                     ParticipantVerificationSession.Tick(group,4);
                     if(count==2 && set=="A") Capture(a,mode==ExperimentManager.ExperimentMode.Normal?"shared-normal":"shared-proposed",MainCanvas(a).transform.parent,2.2f);
                     ParticipantVerificationSession.Set(a.agreement,"pendingReady","pending-ui-check");ParticipantVerificationSession.Call(a.components.OfType<FinalAgreementUI>().Single(),"Update");
@@ -152,6 +169,19 @@ public static class ParticipantUIVerification
                     ParticipantVerificationSession.Set(a.agreement,"pendingReady",null);
                     a.agreement.ToggleLocalReady();ParticipantVerificationSession.Tick(group,2);
                     if(count==2 && set=="A") Capture(a,"agreement",a.components.OfType<FinalAgreementUI>().Single().transform,.60f);
+                    if (count == 2)
+                    {
+                        var b = people[1];
+                        ParticipantVerificationSession.Set(b.net, "_deviceId", "card-regression-device-b");
+                        string revision = a.net.GetGlobalVariable(versionKey);
+                        Check(a.agreement.IsLocalReady && TaggedPlacement(b, ids[0]), tag+" second participant can drop on the same Tier while first is ready");
+                        // Deliver only this update: the first participant's cached state is not another publisher.
+                        foreach (var endpoint in new[] { a, host })
+                            endpoint.Global(placementKey, b.net.GetGlobalVariable(placementKey));
+                        Check(a.agreement.IsLocalReady && a.net.GetGlobalVariable(versionKey) == revision &&
+                            SessionVariableTransport.Decode(a.session, a.net.GetGlobalVariable(placementKey)) == "C",
+                            tag+" tag-only update preserves existing agreement and revision");
+                    }
                     foreach(var e in people.Skip(1)) e.agreement.ToggleLocalReady();ParticipantVerificationSession.Tick(group,6);
                     Check(people.All(e=>e.agreement.IsBoardConfirmed && e.components.OfType<ExperimentResultUI>().Single().IsVisible),tag+" final agreement and Japanese Result");
                     Check(people.All(e=>e.components.OfType<ExperimentResultUI>().Single().GetComponentsInChildren<UnityEngine.UI.Button>().Length==0),tag+" participant Result has no management button");
@@ -168,6 +198,47 @@ public static class ParticipantUIVerification
                     var logger=host.components.OfType<ExperimentLogger>().Single();
                     string folder=logger.SessionDirectory(host.session.CurrentSessionId);
                     Check(logger.FinalSaveStatus=="保存済み" && ExperimentCsvLogStore.ReadCsv(Path.Combine(folder,"final_placements.csv")).Count==ids.Length+1,tag+" final CSV saved");
+                    string boardWire = host.net.GetGlobalVariable(FinalAgreementManager.BoardVariable);
+                    int boardBytes = System.Text.Encoding.UTF8.GetByteCount(boardWire);
+                    Check(boardBytes <= 1024 && host.agreement.IsBoardConfirmed &&
+                        host.agreement.GetFinalPlacements().Count == 8, tag+" atomic eight-card Board uses "+boardBytes+" UTF-8 bytes");
+                    if (count == 2 && set == "B" && mode == ExperimentManager.ExperimentMode.Proposed)
+                    {
+                        string payload = SessionVariableTransport.Decode(host.session, boardWire);
+                        var compact = JObject.Parse(payload);
+                        var legacy = new JObject {
+                            ["confirmed"] = true, ["sessionId"] = compact["s"].DeepClone(),
+                            ["fingerprint"] = compact["f"].DeepClone(), ["participants"] = compact["p"].DeepClone(),
+                            ["readyProof"] = compact["f"].DeepClone(),
+                            ["placements"] = new JArray(compact["e"].Select(entry => new JObject {
+                                ["cardId"] = entry["c"].DeepClone(), ["tier"] = entry["t"].DeepClone(),
+                                ["revision"] = entry["r"].DeepClone()
+                            }))
+                        };
+                        var peer = people[1];
+                        peer.agreement.ResetLocalSession(peer.placements.SharedAgreementId);
+                        typeof(FinalAgreementManager).GetMethod("RestoreBoard", Flags)
+                            .Invoke(peer.agreement, new object[] { legacy.ToString(Newtonsoft.Json.Formatting.None) });
+                        Check(peer.agreement.IsBoardConfirmed && peer.agreement.GetFinalPlacements().Count == 8,
+                            tag+" fresh local state restores the validated legacy result");
+                        string longestPlacement = SessionVariableTransport.EncodePlacement(host.session, "Unclassified",
+                            new SessionVariableTransport.PlacementOperation {
+                                id = new string('a', 32), deviceKey = new string('b', 64),
+                                epoch = long.MaxValue, client = ushort.MaxValue
+                            });
+                        int placementCeiling = System.Text.Encoding.UTF8.GetByteCount(longestPlacement);
+                        Check(placementCeiling <= 1024, tag+" longest placement uses "+placementCeiling+" UTF-8 bytes");
+                        compact["p"] = new JArray(65534, 65535); // Size-only probe: NetSync encodes ClientNo as UInt16.
+                        int repairBytes = System.Text.Encoding.UTF8.GetByteCount(SessionVariableTransport.EncodeRepair(
+                            host.session, compact.ToString(Newtonsoft.Json.Formatting.None)));
+                        Check(repairBytes <= 1024, tag+" Board repair with two maximum-width ClientNos uses "+repairBytes+" UTF-8 bytes");
+                    }
+                    var operations = ExperimentCsvLogStore.ReadCsv(Path.Combine(folder, "card_operations.csv")).Skip(1).ToArray();
+                    Check(operations.Length == ids.Length + (count == 2 ? 1 : 0) &&
+                        operations.All(row => row[1] == host.session.CurrentSessionId && row[3] == mode.ToString() &&
+                            row[4] == set && row[5] == "shared_classification" && row[13] == "C") &&
+                        (count == 1 || (operations.Last()[10] == "2" && operations.Last()[12] == "C")),
+                        tag+" card operations are saved through the final same-Tier update");
                     if(mode==ExperimentManager.ExperimentMode.Proposed) Check(logger.IndependentSaveStatus=="保存済み" && ExperimentCsvLogStore.ReadCsv(Path.Combine(folder,"independent_answers.csv")).Count==ids.Length*count+1,tag+" independent CSV matrix saved");
                     management.Refresh();Check(management.CanReset && management.PreparationActionLabel=="次のセッションを準備する",tag+" normal completion offers next session");
                     if(count==1 && set=="A") ExperimenterControlPanelVerification.Capture(host,"completed-"+mode);
